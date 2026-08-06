@@ -11,8 +11,9 @@
  * Tokens are declared as plain custom properties on `:root` and re-declared under the dark media
  * query, then registered into Tailwind's `@theme` by reference. That's what lets a single set of
  * utility names (`bg-canvas`, `text-ink-muted`) follow the system theme with no class toggling and
- * no flash on load. Don't use Tailwind's opacity modifiers (`bg-canvas/50`) on these: the
- * indirection defeats them. Reach for `color-mix()` instead.
+ * no flash on load. An opacity modifier on one of these compiles to a `color-mix()` behind an
+ * `@supports` rule, with the solid colour as the fallback, so a browser that can't mix gets an
+ * opaque surface rather than a broken one.
  */
 
 :root {

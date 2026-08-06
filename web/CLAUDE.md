@@ -16,8 +16,9 @@ contract it consumes is `docs/api.md`; read that before touching anything that r
   the API only sends kinds a session has rows for.
 - **Never present a `byKind` share as a share of elapsed time.** It's lane time, which is larger. `docs/api.md` § The
   two numbers that aren't the same.
-- Tailwind tokens are registered `@theme inline` over custom properties, so **opacity modifiers (`bg-canvas/50`) don't
-  work** on them. Use `color-mix()`.
+- Tailwind tokens are registered `@theme inline` over custom properties. An opacity modifier on one compiles to a
+  `color-mix()` behind `@supports`, with the solid colour as its fallback, which is why the sticky header is opaque
+  rather than broken on a browser that can't mix.
 - ECharts is assembled from parts in `components/charts/echarts.ts`. A new chart type has to register itself there.
 - **The light ink ramp is set by its tightest pairing**, faint text on `sunken`, which clears 4.5:1 with nothing spare.
   Don't lighten `--csa-ink-faint` or `--csa-ink-muted`; both pages audit clean under axe in both themes.
