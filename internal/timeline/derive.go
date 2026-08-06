@@ -225,19 +225,21 @@ func (d *laneDeriver) flush(ts time.Time) {
 
 	parallel := len(batch) > 1
 	for i, c := range batch {
+		v := judge(c, d.opts)
 		row := Row{
 			From:       c.start,
 			Until:      c.end,
 			Agent:      d.lane.Name,
 			LaneID:     d.lane.ID,
-			Kind:       KindToolExecution,
+			Kind:       v.kind,
 			Tool:       c.block.ToolName,
 			Class:      c.class,
 			Overlapped: parallel && i < len(batch)-1,
+			TimedOut:   v.timedOut,
 			IsError:    c.result.IsError,
 			Line:       c.line,
 		}
-		row.Info = executionInfo(c, row.Overlapped, len(batch))
+		row.Info = executionInfo(c, v, len(batch))
 		d.rows = append(d.rows, row)
 		if c.end.After(d.cursor) {
 			d.cursor = c.end

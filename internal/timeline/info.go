@@ -2,6 +2,7 @@ package timeline
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -115,5 +116,25 @@ func clip(s string, n int) string {
 // thinkingInfo labels a thinking row.
 func thinkingInfo(b transcript.Block) string { return "" }
 
-// executionInfo labels a tool execution row.
-func executionInfo(c *call, overlapped bool, batch int) string { return callInfo(c) }
+// executionInfo labels a tool execution or a stalled row: what ran, and anything unusual about how it ended.
+func executionInfo(c *call, v verdict, batch int) string {
+	parts := []string{describe(c.block.ToolName, c.class, c.subject)}
+
+	switch {
+	case v.kind == KindStalled:
+		parts = append(parts, "no result for "+FormatDuration(c.end.Sub(c.start))+
+			", past the "+FormatDuration(v.threshold)+
+			" a "+string(c.class)+" call can plausibly take")
+	case !c.resolved:
+		parts = append(parts, "no result in the transcript, the tool may still have been running")
+	case v.timedOut:
+		parts = append(parts, "timed out after "+FormatDuration(v.timeout))
+	}
+	if c.result.IsError {
+		parts = append(parts, "the tool reported a failure")
+	}
+	if batch > 1 {
+		parts = append(parts, "one of "+strconv.Itoa(batch)+" calls running at once")
+	}
+	return strings.Join(parts, "; ")
+}
