@@ -249,3 +249,20 @@ func TestDeriveAbsorbsUnknownBlocks(t *testing.T) {
 		t.Errorf("the thinking row lasted %s, want it to absorb the stretch the fallback block covered", got)
 	}
 }
+
+// TestDeriveUnknownBlockFirstInARecord covers a record whose first block is one nothing decodes. The span that ended
+// there belongs to the first block that does, not to a zero-length row with the time dropped on the floor.
+func TestDeriveUnknownBlockFirstInARecord(t *testing.T) {
+	lane := newLane("lead", true).
+		add(0, promptRec("go")).
+		add(30, assistantRec(transcript.Block{Type: "fallback"}, thinkingBlock(""), textBlock("done"))).
+		done()
+
+	tl := Derive(sessionOf(lane), Options{})
+
+	requireKinds(t, tl.Rows, KindThinking, KindWriting)
+	checkTiling(t, tl.Rows, at(0), at(30))
+	if got := tl.Rows[0].Duration(); got != 30*time.Second {
+		t.Errorf("the thinking row lasted %s, want the whole span the record closed", got)
+	}
+}

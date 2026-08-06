@@ -44,6 +44,8 @@ func Derive(s *session.Session, opts Options) *Timeline {
 		}
 	}
 
+	// nameWaits sweeps the lead's rows in time order, which they're in because a lane's cursor only moves forward and
+	// the lead's lane goes in first. The sort after it is stable, so rows that start together keep their lane order.
 	nameWaits(tl, opts)
 	sort.SliceStable(tl.Rows, func(i, j int) bool { return tl.Rows[i].From.Before(tl.Rows[j].From) })
 	return tl
@@ -174,10 +176,8 @@ func (d *laneDeriver) forward(ts time.Time) time.Time {
 // is the thinking block, which is where the time actually went.
 func (d *laneDeriver) emitResponse(rec *transcript.Record, ts time.Time) {
 	from := d.cursor
-	emitted := false
 	for _, b := range rec.Blocks {
 		row := Row{From: from, Until: ts, Agent: d.lane.Name, LaneID: d.lane.ID, Line: rec.Line}
-		from = ts // every block after the first is zero-length
 
 		switch b.Type {
 		case transcript.BlockThinking:
@@ -201,9 +201,9 @@ func (d *laneDeriver) emitResponse(rec *transcript.Record, ts time.Time) {
 			continue
 		}
 		d.rows = append(d.rows, row)
-		emitted = true
-	}
-	if emitted {
+		// The span belongs to the first block that produced a row, so everything after it is zero-length. A block
+		// that produced none leaves the span where it was.
+		from = ts
 		d.cursor = ts
 	}
 }
