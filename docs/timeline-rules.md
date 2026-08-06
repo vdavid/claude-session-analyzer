@@ -24,7 +24,8 @@ no gaps and no negative durations (verified 2026-08-06, `TestRealTimelineSweep`)
   queue time and prompt processing, not only reasoning. On a 670k-token context that isn't noise, and it's why the
   legend has to say so rather than calling this "reasoning".
 - **writing**: a `text` block, the agent composing prose for its caller.
-- **tool call**: composing the call, from the previous block until the `tool_use` block finished streaming.
+- **tool call**: composing the call, from the previous block until the `tool_use` block finished streaming. When no
+  thinking block came first, this span carries the whole response latency, the same caveat `thinking` has.
 - **tool execution**: the tool running, from the `tool_use` block until its result came back. This is the honest wall
   clock of the tool, including whatever the tool itself waited on.
 - **waiting**: the lane produced nothing, because it was idle on a person, a teammate, or a background task.
@@ -115,6 +116,11 @@ in the corpus has 977 workflow lanes and a scan per row would not do.
 
 - It can't say when a suspended agent woke up, only that the result arrived late.
 - It can't split a multi-block record's span across its blocks, because there's only one timestamp.
-- A thinking span includes model latency and always will.
+- A thinking span includes model latency and always will, and so does a tool call span with no thinking block before
+  it.
+- A tool execution span includes anything the tool waited on, including a person answering a permission prompt. Nothing
+  in the transcript separates the two.
+- Two lanes can carry the same name, because a lane with no `.meta.json` falls back to its agent type. Group by
+  `LaneID`, not by `Agent`.
 - Stall detection is a heuristic. Every stalled row carries the command, the duration, and the line it was measured
   against, so a reader can overrule it.
