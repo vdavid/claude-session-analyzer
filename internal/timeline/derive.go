@@ -119,10 +119,10 @@ func (d *laneDeriver) run() []Row {
 		switch {
 		case rec.Type == transcript.TypeAssistant && len(rec.Blocks) > 0:
 			d.flush(ts)
-			if d.stopped && !d.woken {
-				// The turn had ended and the lane resumed with nothing on record to say what woke it or when. The
-				// stretch is idle time, and the block that closed it can't claim any of it.
-				d.emitWait(ts, "idle after the turn ended", rec.Line)
+			if reason, idle := d.wasIdle(ts); idle {
+				// Nothing on record says when the lane started working again, so the stretch counts as idle and the
+				// block that closed it claims none of it.
+				d.emitWait(ts, reason, rec.Line)
 			}
 			d.working()
 			d.emitResponse(rec, ts)
@@ -136,9 +136,15 @@ func (d *laneDeriver) run() []Row {
 			d.emitWait(ts, waitInfo(rec), rec.Line)
 			d.working()
 
-		case rec.Type == transcript.TypeQueueOperation && d.stopped && isEnqueue(rec):
-			// Input that landed in the queue while the lane sat idle. Its timestamp is when the input actually
-			// arrived, which is where the wait ends and the next turn's thinking starts.
+		case rec.Type == transcript.TypeQueueOperation && isEnqueue(rec) && len(d.batch) == 0:
+			// Input landing in the queue while no tool call is open. Its timestamp is when the input actually arrived,
+			// which is where the wait ends and the next turn's thinking starts.
+			//
+			// This doesn't wait for a turn-end record, because the harness doesn't always write one: a lane in the
+			// corpus sat silent for 7h23m after a text block, took a queued "Go on", and answered three seconds later,
+			// and with the turn ending as the only signal all of it counted as thinking. Input arriving while the
+			// agent is genuinely composing clips a few seconds off the front of that row instead, which is a bounded
+			// error where the other one has no bound.
 			d.emitWait(ts, waitInfo(rec), rec.Line)
 			d.woken = true
 
@@ -280,6 +286,22 @@ func (d *laneDeriver) flush(ts time.Time) {
 
 // working marks the lane as busy again, which is what a new turn's first record means.
 func (d *laneDeriver) working() { d.stopped, d.woken = false, false }
+
+// wasIdle says the stretch ending now was the lane sitting idle rather than the model working, and why.
+//
+// There are two ways to tell. The lane's turn ended and no input has arrived since, which is evidence. Or the stretch
+// is longer than a model response can be, which is a backstop for the lanes that carry no evidence at all: a session
+// left after `/exit` and resumed 25 days later has nothing between the two but a text block.
+func (d *laneDeriver) wasIdle(ts time.Time) (string, bool) {
+	switch {
+	case d.stopped && !d.woken:
+		return "idle after the turn ended", true
+	case ts.Sub(d.cursor) > d.opts.MaxResponseSpan:
+		return "idle, with nothing on record saying when the lane started working again", true
+	default:
+		return "", false
+	}
+}
 
 // emitWait closes an idle gap. A zero-length wait is dropped: the lane's very first record is a prompt, and a wait of
 // no time isn't worth a row.

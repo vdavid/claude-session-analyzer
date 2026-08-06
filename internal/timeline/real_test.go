@@ -158,6 +158,8 @@ func TestRealTimelineSweep(t *testing.T) {
 	kinds := map[Kind]int{}
 	stalls := map[ToolClass]int{}
 	var stalled []string
+	longest := map[Kind]Row{}
+	longestIn := map[Kind]string{}
 	start := time.Now()
 
 	for _, slug := range entries {
@@ -189,6 +191,9 @@ func TestRealTimelineSweep(t *testing.T) {
 			rows += len(tl.Rows)
 			for _, r := range tl.Rows {
 				kinds[r.Kind]++
+				if r.Duration() > longest[r.Kind].Duration() {
+					longest[r.Kind], longestIn[r.Kind] = r, id[:8]
+				}
 				if r.Kind == KindStalled {
 					stalls[r.Class]++
 					stalled = append(stalled, fmt.Sprintf("%s %s %s: %s",
@@ -206,6 +211,13 @@ func TestRealTimelineSweep(t *testing.T) {
 	t.Log("stalls by class, which is where a threshold that defames honest work shows up:")
 	for class, n := range stalls {
 		t.Logf("  %-16s %8d", class, n)
+	}
+	t.Log("the longest row of each kind, which is where a rule that mislabels a long gap shows up:")
+	for _, kind := range Kinds {
+		if r, ok := longest[kind]; ok {
+			t.Logf("  %-16s %10s  %s %-20s %s", kind, FormatDuration(r.Duration()), longestIn[kind], r.Agent,
+				clip(r.Info, 110))
+		}
 	}
 	t.Log("every stall in the corpus, so a wrong call is visible rather than buried in a count:")
 	for _, line := range stalled {

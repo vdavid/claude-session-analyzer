@@ -58,15 +58,28 @@ which is the thinking block, and that's where the time went. The rest are zero-l
 An attachment, a hook's output, a turn summary: they carry timestamps but they aren't the lane doing something, so
 their stretch belongs to whichever row surrounds them. Same for a block type nothing decodes, such as `fallback`.
 
-### A turn ending is the only evidence a lane went idle
+### Telling an idle lane from a thinking one
 
-Without it, a lane that resumes hours later with nothing on record to say what woke it would report hours of
-**thinking**, which is badly wrong and completely invisible. So `turn_duration`, `stop_hook_summary`, and
-`away_summary` mark the lane as stopped; input arriving (a prompt, or an `enqueue`) says where the next turn's thinking
-starts from; and a lane that resumes with neither gets a waiting row and a zero-length block.
+This is the rule that goes wrong invisibly. A lane that sits silent for hours and then produces a block will report
+those hours as **thinking** unless something says otherwise, and a reader has no way to spot it.
 
-Queued input matters more than it looks: 41 of the reference session's 78 idle gaps over five minutes end at an
-`enqueue` rather than at a prompt, so watching only prompts misplaces half of them.
+Three signals, in order of how much they can be trusted:
+
+1. **A turn ended.** `turn_duration`, `stop_hook_summary`, and `away_summary` all say the lane stopped. 46 of the
+   reference session's idle gaps over five minutes sit right after one.
+2. **Input arrived.** A prompt, or a `queue-operation: enqueue`, timestamps the moment there was something to work on,
+   which is where the next turn's thinking starts. Queued input matters more than it looks: 41 of the reference
+   session's 78 long idle gaps end at an `enqueue` rather than at a prompt, so watching only prompts misplaces half of
+   them. An enqueue splits the lane whenever no tool call is open, without waiting for a turn-end record, because the
+   harness doesn't always write one. The cost is that input arriving while the agent is genuinely composing clips a few
+   seconds off the front of that row, which is bounded where the alternative isn't: one lane in the corpus sat silent
+   for 7h23m after a text block, took a queued "Go on", and answered three seconds later.
+3. **The stretch is too long to be a response.** The backstop for lanes carrying neither of the above, which is what a
+   session resumed after `/exit` looks like: 25 days of nothing, then a text block. `DefaultMaxResponseSpan` is 15
+   minutes, and the constant carries the distribution that puts it there.
+
+A stretch read as idle gets a waiting row, and the block that closed it claims none of it: nothing in the transcript
+says when the lane actually woke up.
 
 ### Compaction is placed by its own duration, not by the stamps around it
 
@@ -114,7 +127,8 @@ in the corpus has 977 workflow lanes and a scan per row would not do.
 
 ## What this doesn't do
 
-- It can't say when a suspended agent woke up, only that the result arrived late.
+- It can't say when a suspended agent woke up, only that the result arrived late. The same goes for a lane that resumes
+  with no input on record: the row before it is idle, and the block that ended it claims no time.
 - It can't split a multi-block record's span across its blocks, because there's only one timestamp.
 - A thinking span includes model latency and always will, and so does a tool call span with no thinking block before
   it.

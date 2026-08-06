@@ -198,7 +198,7 @@ func TestSubagentWaitsAreNotAnnotated(t *testing.T) {
 		done()
 
 	rows := Derive(sessionOf(lead, worker), Options{}).Rows
-	wait := rowOfKind(t, rows, KindWaiting)
+	wait := rowOfKindIn(t, rows, KindWaiting, "worker")
 
 	if strings.Contains(wait.Info, "alive") {
 		t.Errorf("a subagent's wait shouldn't list the session's other lanes: %q", wait.Info)
@@ -230,11 +230,68 @@ func TestSpawnRowNamesTheTeammate(t *testing.T) {
 
 func rowOfKind(t *testing.T, rows []Row, kind Kind) Row {
 	t.Helper()
+	return rowOfKindIn(t, rows, kind, "")
+}
+
+// rowOfKindIn returns the first row of a kind, optionally from one lane.
+func rowOfKindIn(t *testing.T, rows []Row, kind Kind, agent string) Row {
+	t.Helper()
 	for _, r := range rows {
-		if r.Kind == kind {
+		if r.Kind == kind && (agent == "" || r.Agent == agent) {
 			return r
 		}
 	}
-	t.Fatalf("no %s row:\n%s", kind, dump(rows))
+	t.Fatalf("no %s row for %q:\n%s", kind, agent, dump(rows))
 	return Row{}
+}
+
+// TestQueuedInputSplitsEvenWithoutATurnEnding covers a lane the harness never wrote a turn-end record for. Real
+// example: a text block, then nothing for 7h23m, then a queued "Go on" and a thinking block three seconds later. With
+// the turn ending as the only signal, those 7h23m were reported as thinking.
+//
+// So input arriving splits the lane whenever no tool call is open, whatever the harness recorded. The cost is that
+// input arriving while the agent is genuinely composing clips a few seconds off the front of that row, which is a
+// bounded error where the other one has no bound at all.
+func TestQueuedInputSplitsEvenWithoutATurnEnding(t *testing.T) {
+	lane := newLane("lead", true).
+		add(0, promptRec("go")).
+		add(5, assistantRec(textBlock("Here's the plan."))).
+		add(26600, queueRec("enqueue", "Go on")).
+		add(26603, assistantRec(thinkingBlock(""))).
+		add(26610, assistantRec(textBlock("Carrying on."))).
+		done()
+
+	rows := Derive(sessionOf(lane), Options{}).Rows
+
+	requireKinds(t, rows, KindWriting, KindWaiting, KindThinking, KindWriting)
+	checkTiling(t, rows, at(0), at(26610))
+	if got := rows[1].Duration(); got != 26595*time.Second {
+		t.Errorf("the wait lasted %s, want the whole stretch until the input arrived", got)
+	}
+	if got := rows[2].Duration(); got != 3*time.Second {
+		t.Errorf("thinking lasted %s, want the 3s from the input to the block", got)
+	}
+}
+
+// TestImplausiblyLongResponseIsIdleTime is the backstop for a lane with no evidence at all. Real example: a session
+// left after `/exit` and resumed 25 days later, whose first record on resume is a text block. Nothing in the lane says
+// when the resume happened, and 596 hours is not a model writing a paragraph.
+func TestImplausiblyLongResponseIsIdleTime(t *testing.T) {
+	lane := newLane("lead", true).
+		add(0, promptRec("go")).
+		add(5, assistantRec(textBlock("Goodbye."))).
+		add(2200000, assistantRec(textBlock("Back again."))).
+		add(2200010, assistantRec(textBlock("Where were we?"))).
+		done()
+
+	rows := Derive(sessionOf(lane), Options{}).Rows
+
+	requireKinds(t, rows, KindWriting, KindWaiting, KindWriting, KindWriting)
+	checkTiling(t, rows, at(0), at(2200010))
+	if rows[2].Duration() != 0 {
+		t.Errorf("the block that closed the gap can't claim it: %s", rowSummary(rows[2]))
+	}
+	if !strings.Contains(rows[1].Info, "idle") {
+		t.Errorf("the wait says %q, want it to read as idle time", rows[1].Info)
+	}
 }
