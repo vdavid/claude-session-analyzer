@@ -384,7 +384,8 @@ type laneState int
 const (
 	// laneWorking means the lane is mid-turn: the time passing is the model thinking or a tool running.
 	laneWorking laneState = iota
-	// laneIdle means the turn ended and nothing has arrived since, so the time passing is idle.
+	// laneIdle means the lane stopped and nothing has arrived since, so the time passing is idle. It stopped at a turn
+	// ending or at a request the API refused, and idleReason says which.
 	laneIdle
 	// lanePending means input has arrived and the lane hasn't produced anything yet. It's where the next turn's
 	// thinking starts from, so the stretch after it belongs to the model rather than to the wait.
