@@ -73,6 +73,8 @@ func laneSpan(lane *session.Lane) (first, last time.Time, ok bool) {
 type call struct {
 	block transcript.Block
 	class ToolClass
+	// id is how a breakdown names the call. It's read once, here, because reading it means re-parsing a shell command.
+	id ToolID
 	// subject is the short phrase naming what the call was about, reused by the call row and the execution row.
 	subject string
 	start   time.Time
@@ -201,10 +203,13 @@ func (d *laneDeriver) emitResponse(rec *transcript.Record, ts time.Time) {
 			row.Kind = KindWriting
 			row.Info = clip(b.Text, subjectLimit)
 		case transcript.BlockToolUse:
-			c := &call{block: b, class: Classify(b), subject: subjectOf(b), start: ts, line: rec.Line}
+			id := Identify(b)
+			c := &call{block: b, class: id.Class, id: id, subject: subjectOf(b), start: ts, line: rec.Line}
 			row.Kind = KindToolCall
 			row.Tool = b.ToolName
 			row.Class = c.class
+			row.ToolGroup = id.Group
+			row.ToolLeaf = id.Leaf
 			row.Info = callInfo(c)
 			d.open[b.ToolUseID] = c
 			d.batch = append(d.batch, c)
@@ -279,6 +284,8 @@ func (d *laneDeriver) flush(ts time.Time) {
 			Kind:       v.kind,
 			Tool:       c.block.ToolName,
 			Class:      c.class,
+			ToolGroup:  c.id.Group,
+			ToolLeaf:   c.id.Leaf,
 			Overlapped: parallel && i < len(batch)-1,
 			TimedOut:   v.timedOut,
 			IsError:    c.result.IsError,

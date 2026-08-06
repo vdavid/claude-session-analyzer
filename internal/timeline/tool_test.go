@@ -21,6 +21,9 @@ func TestClassifyCommand(t *testing.T) {
 		{"find . -name '*.go'", ClassSearch},
 		{"git add -A", ClassGit},
 		{"gh run watch", ClassGit},
+		{"curl -s https://example.com", ClassWeb},
+		// A fetch explains a command's time better than reading what it fetched does.
+		{"curl -s https://example.com | jq .name", ClassWeb},
 
 		// Build and test runners are told apart by the program, not by the subcommand: `cargo check` builds, and
 		// `pnpm check` is a project's own gate.
@@ -111,6 +114,83 @@ type transcriptBlockCase struct {
 	tool  string
 	key   string
 	value string
+}
+
+// TestIdentify covers the two names a breakdown groups a call by. The cases that matter are the two tools that are
+// really many: `Bash`, which is 62% of the calls in the corpus, and an MCP server, whose methods would otherwise be
+// as many separate tools as it has methods.
+func TestIdentify(t *testing.T) {
+	cases := []struct {
+		block transcriptBlockCase
+		want  ToolID
+	}{
+		// A tool that means one thing is its own group, and its own leaf.
+		{transcriptBlockCase{"Read", "file_path", "/tmp/a"}, ToolID{ClassFileRead, "Read", "Read"}},
+		{transcriptBlockCase{"Edit", "file_path", "/tmp/a"}, ToolID{ClassFileWrite, "Edit", "Edit"}},
+		{transcriptBlockCase{"EnterWorktree", "branch", "x"}, ToolID{ClassOther, "EnterWorktree", "EnterWorktree"}},
+
+		// An MCP call is grouped by the server it went to, and named by the method it called.
+		{
+			transcriptBlockCase{"mcp__codegraph__codegraph_search", "query", "Row"},
+			ToolID{ClassMCP, "codegraph (MCP)", "codegraph_search"},
+		},
+		{
+			// A server name carrying single underscores survives: the separator is two.
+			transcriptBlockCase{"mcp__claude_ai_Gmail__get_thread", "query", "x"},
+			ToolID{ClassMCP, "claude_ai_Gmail (MCP)", "get_thread"},
+		},
+		{
+			// A name with no method to it still says which server it went to.
+			transcriptBlockCase{"mcp__db", "query", "x"},
+			ToolID{ClassMCP, "db (MCP)", "db"},
+		},
+
+		// Bash is grouped by what the command was doing, and named by the program that earned it.
+		{transcriptBlockCase{"Bash", "command", "ls -la /tmp"}, ToolID{ClassFileRead, "Bash (file read)", "ls"}},
+		{transcriptBlockCase{"Bash", "command", "git commit -m 'x'"}, ToolID{ClassGit, "Bash (git)", "git commit"}},
+		{transcriptBlockCase{"Bash", "command", "gh run watch"}, ToolID{ClassGit, "Bash (git)", "gh run"}},
+		{transcriptBlockCase{"Bash", "command", "cargo test -p app"}, ToolID{ClassTest, "Bash (test)", "cargo test"}},
+		{transcriptBlockCase{"Bash", "command", "go build ./..."}, ToolID{ClassBuild, "Bash (build)", "go build"}},
+		{transcriptBlockCase{"Bash", "command", "pnpm check -q go"}, ToolID{ClassChecker, "Bash (checker)", "pnpm check"}},
+		// A runner's `run` is punctuation, so the leaf names what it was asked to run.
+		{transcriptBlockCase{"Bash", "command", "npm run check"}, ToolID{ClassChecker, "Bash (checker)", "npm check"}},
+		// A gate invoked by path is named by its file, not by the path to it.
+		{
+			transcriptBlockCase{"Bash", "command", "./scripts/check.sh --fast"},
+			ToolID{ClassChecker, "Bash (checker)", "check.sh"},
+		},
+		// The program that named the compound command is the one the leaf carries.
+		{
+			transcriptBlockCase{"Bash", "command", "git add -A && pnpm check"},
+			ToolID{ClassChecker, "Bash (checker)", "pnpm check"},
+		},
+		// Nothing in the command outranks a plain shell program, so the first one names it.
+		{transcriptBlockCase{"Bash", "command", "awk '{print $1}' log.txt"}, ToolID{ClassShell, "Bash (shell)", "awk"}},
+		// Fetching over the network is web work, wherever it sits in the command.
+		{
+			transcriptBlockCase{"Bash", "command", "curl -s https://example.com | jq .name"},
+			ToolID{ClassWeb, "Bash (web)", "curl"},
+		},
+	}
+
+	for _, c := range cases {
+		b := toolUseBlock("id", c.block.tool, c.block.key, c.block.value)
+		if got := Identify(b); got != c.want {
+			t.Errorf("Identify(%s) = %+v, want %+v", c.block.tool, got, c.want)
+		}
+	}
+}
+
+// TestIdentifyBashWithoutItsCommand covers a call whose command was too large to keep. There's no program to name, and
+// inventing one would be worse than saying so.
+func TestIdentifyBashWithoutItsCommand(t *testing.T) {
+	b := toolUseBlock("id", "Bash", "description", "Rewrite the fixture")
+	b.InputElided = []string{"command"}
+
+	want := ToolID{ClassShell, "Bash (shell)", "Bash"}
+	if got := Identify(b); got != want {
+		t.Errorf("Identify = %+v, want %+v", got, want)
+	}
 }
 
 // TestClassifyBashWithoutItsCommand covers a call whose command was too large to keep. It's still a shell command, and

@@ -50,8 +50,11 @@ const (
 // named after the highest class in it, so `git add -A && pnpm check` is a checker run and `cargo build | grep error`
 // is a build. The tail of the list is the ordinary utilities, which only get to name a command when nothing else is
 // happening in it.
+//
+// Every class a command can be read as has to be in here. One that isn't can never outrank the `ClassShell` a command
+// starts out as, so it would be mapped and then never returned.
 var precedence = []ToolClass{
-	ClassWait, ClassDevServer, ClassChecker, ClassBuild, ClassTest, ClassGit,
+	ClassWait, ClassDevServer, ClassChecker, ClassBuild, ClassTest, ClassGit, ClassWeb,
 	ClassFileWrite, ClassSearch, ClassFileRead, ClassShell,
 }
 
@@ -144,31 +147,106 @@ var toolchainSubcommands = map[string]ToolClass{
 
 var toolchains = map[string]bool{"cargo": true, "go": true, "dotnet": true, "swift": true}
 
+// versionControl are the programs whose subcommand is the whole story: `git commit` and `git status` are different
+// work wearing one name, the same way `Bash` is.
+var versionControl = map[string]bool{"git": true, "gh": true, "hg": true, "jj": true}
+
+// mcpPrefix is what the harness puts in front of every tool an MCP server provides, with the server's name and the
+// method's after it, separated the same way: `mcp__codegraph__codegraph_search`.
+const mcpPrefix = "mcp__"
+
+// leafLimit is how much of a program's name a leaf carries. A program word is a handful of characters; the cap is
+// there so a pathological command can't put a kilobyte in a legend.
+const leafLimit = 60
+
+// ToolID is how a tool call is named in a breakdown of a session.
+//
+// Two names rather than one, because the tools that matter are the ones that are really many tools. `Bash` is 62% of
+// the calls in the corpus (sampled 2026-08-06 over 76,708 calls in 624 transcripts), so a chart drawing one slice per
+// tool name is three slices and a smear. Group splits those by what the call was doing and collapses an MCP server's
+// methods into the server, which is the level a reader asks about ("who used codegraph"). Leaf names the exact thing,
+// for the legend row under it.
+type ToolID struct {
+	Class ToolClass
+	// Group is the slice a breakdown draws: `Bash (git)`, `codegraph (MCP)`, `Read`.
+	Group string
+	// Leaf is the exact thing that ran inside the group: `git commit`, `codegraph_search`, `Read`.
+	Leaf string
+}
+
 // Classify reads a tool call and says what kind of work it was doing.
-func Classify(b transcript.Block) ToolClass {
-	if class, ok := toolClasses[b.ToolName]; ok {
-		return class
+func Classify(b transcript.Block) ToolClass { return Identify(b).Class }
+
+// Identify reads a tool call once and says everything the derivation knows about what it was: its class, and the two
+// names a breakdown groups it by.
+func Identify(b transcript.Block) ToolID {
+	name := b.ToolName
+
+	if class, ok := toolClasses[name]; ok {
+		return ToolID{Class: class, Group: name, Leaf: name}
 	}
-	if strings.HasPrefix(b.ToolName, "mcp__") {
-		return ClassMCP
+	if server, method, ok := splitMCPName(name); ok {
+		return ToolID{Class: ClassMCP, Group: server + " (MCP)", Leaf: method}
 	}
-	if b.ToolName == "Bash" {
-		// A command too large to keep is still a shell command, and guessing at more would be inventing.
-		return classifyCommand(inputString(b, "command"))
+	if name == "Bash" {
+		// A command too large to keep is still a shell command, and guessing at more would be inventing. The leaf
+		// falls back to the tool's own name, which is all that's known.
+		a := analyzeCommand(inputString(b, "command"))
+		leaf := a.program
+		if leaf == "" {
+			leaf = name
+		}
+		return ToolID{Class: a.class, Group: name + " (" + string(a.class) + ")", Leaf: leaf}
 	}
-	return ClassOther
+	return ToolID{Class: ClassOther, Group: name, Leaf: name}
+}
+
+// splitMCPName pulls the server and the method out of an MCP tool's name. The separator is two underscores, so a
+// server or a method carrying single ones (`claude_ai_Gmail`, `get_thread`) comes through whole. A name with no method
+// to it still says which server it went to, which is the level the breakdown groups by anyway.
+func splitMCPName(name string) (server, method string, ok bool) {
+	if !strings.HasPrefix(name, mcpPrefix) {
+		return "", "", false
+	}
+	rest := name[len(mcpPrefix):]
+	if rest == "" {
+		return "", "", false
+	}
+	server, method, found := strings.Cut(rest, "__")
+	if !found || method == "" {
+		return server, server, true
+	}
+	return server, method, true
+}
+
+// commandAnalysis is what reading a shell command yields: the class that names it, and the program that earned it.
+type commandAnalysis struct {
+	class ToolClass
+	// program is the leaf label: the program of the segment that named the class, carrying the subcommand wherever
+	// that's what the program actually did (`git commit`, `cargo test`, `pnpm check`). Empty for a command with
+	// nothing in it to name.
+	program string
 }
 
 // classifyCommand names a shell command after the costliest thing it does.
-func classifyCommand(cmd string) ToolClass {
+func classifyCommand(cmd string) ToolClass { return analyzeCommand(cmd).class }
+
+// analyzeCommand reads a shell command once: which of the things it does costs the most, and which program that was.
+func analyzeCommand(cmd string) commandAnalysis {
 	segments := splitCommand(cmd)
 	ctx := cmdContext{polling: isPollingLoop(segments), sole: len(segments) == 1}
 
-	best := ClassShell
+	best := commandAnalysis{class: ClassShell}
+	rank := -1 // below every class, so the first segment with a program in it always names the command
 	for _, seg := range segments {
-		class := classifySegment(seg, ctx)
-		if precedenceRank[class] > precedenceRank[best] {
-			best = class
+		words := commandWords(seg)
+		if len(words) == 0 {
+			continue
+		}
+		class := classifySegment(words, ctx)
+		if precedenceRank[class] > rank {
+			best = commandAnalysis{class: class, program: programLabel(words)}
+			rank = precedenceRank[class]
 		}
 	}
 	return best
@@ -197,9 +275,8 @@ func isPollingLoop(segments []string) bool {
 	return loop && sleep
 }
 
-// classifySegment names one piece of a compound command.
-func classifySegment(seg string, ctx cmdContext) ToolClass {
-	words := commandWords(seg)
+// classifySegment names one piece of a compound command, already stripped down to its program and arguments.
+func classifySegment(words []string, ctx cmdContext) ToolClass {
 	if len(words) == 0 {
 		return ClassShell
 	}
@@ -238,24 +315,71 @@ func classifySegment(seg string, ctx cmdContext) ToolClass {
 	return ClassShell
 }
 
-// runnerClass reads what a package runner was asked to run, stepping over the `run` in `npm run check`.
+// runnerClass reads what a package runner was asked to run.
 func runnerClass(words []string) ToolClass {
+	target := runnerTarget(words)
+	if target == "" {
+		return ClassShell
+	}
+	if class, ok := runnerScripts[target]; ok {
+		return class
+	}
+	if class, ok := programClasses[target]; ok {
+		return class
+	}
+	if toolchains[target] {
+		return ClassBuild
+	}
+	return ClassShell
+}
+
+// runnerTarget is what a package runner was asked to run, stepping over the `run` in `npm run check`.
+func runnerTarget(words []string) string {
 	for _, w := range words[1:] {
 		if strings.HasPrefix(w, "-") || w == "run" || w == "exec" {
 			continue
 		}
-		if class, ok := runnerScripts[w]; ok {
-			return class
-		}
-		if class, ok := programClasses[w]; ok {
-			return class
-		}
-		if toolchains[w] {
-			return ClassBuild
-		}
-		return ClassShell
+		return w
 	}
-	return ClassShell
+	return ""
+}
+
+// programLabel names the program a segment ran, for the leaf of a breakdown. It carries the subcommand wherever the
+// subcommand is what the program actually did: `git commit` and `git status` are as different as two tools, and so
+// are `cargo build` and `cargo test`. A program invoked by path is named by its file, because the path is where a
+// project keeps its scripts rather than anything about the work.
+func programLabel(words []string) string {
+	program := baseName(words[0])
+	switch {
+	case packageRunners[program]:
+		if target := runnerTarget(words); target != "" {
+			return clip(program+" "+target, leafLimit)
+		}
+	case toolchains[program] || versionControl[program]:
+		if sub := firstArgument(words); sub != "" {
+			return clip(program+" "+sub, leafLimit)
+		}
+	}
+	return clip(program, leafLimit)
+}
+
+// firstArgument is a command's first argument that isn't a flag, which is where a subcommand sits.
+func firstArgument(words []string) string {
+	for _, w := range words[1:] {
+		if strings.HasPrefix(w, "-") {
+			continue
+		}
+		return w
+	}
+	return ""
+}
+
+// baseName strips the path a program was invoked through: `./scripts/check.sh` is `check.sh`.
+func baseName(program string) string {
+	if i := strings.LastIndexByte(program, '/'); i >= 0 {
+		return program[i+1:]
+	}
+	return program
 }
 
 // isCheckerScript spots a project's own gate invoked by path: `./scripts/check.sh`, `bin/lint`.

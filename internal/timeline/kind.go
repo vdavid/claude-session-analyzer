@@ -88,6 +88,11 @@ type Row struct {
 	Tool string
 	// Class is what kind of work the tool was doing. Only meaningful alongside Tool.
 	Class ToolClass
+	// ToolGroup and ToolLeaf are how a breakdown names the call, and are only meaningful alongside Tool. `Bash` is a
+	// dozen tools wearing one name, so the group splits it by what it was doing and the leaf names the program:
+	// `Bash (git)` and `git commit`. See ToolID.
+	ToolGroup string
+	ToolLeaf  string
 
 	// Overlapped marks a row that ran concurrently with a sibling in the same lane, which happens when one response
 	// fires several tool calls at once. These are the only rows that break the tiling.
@@ -103,6 +108,12 @@ type Row struct {
 
 // Duration is how long the row lasted. It's never negative: the derivation clamps a backwards timestamp to zero.
 func (r Row) Duration() time.Duration { return r.Until.Sub(r.From) }
+
+// IsToolRun says the row is the stretch a tool call actually ran for, whatever the derivation ended up calling it: a
+// tool execution, a stall, or a wait on the person the tool asked. Every call has exactly one of these and exactly one
+// KindToolCall row beside it, so counting these counts calls. Ask this rather than listing kinds, so a new verdict
+// can't be missed.
+func (r Row) IsToolRun() bool { return r.Tool != "" && r.Kind != KindToolCall }
 
 // LaneSpan is when a lane was alive, for drawing a swimlane and for saying who was around during a wait.
 type LaneSpan struct {
