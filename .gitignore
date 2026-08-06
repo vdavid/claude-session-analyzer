@@ -1,0 +1,19 @@
+# Go
+/claude-session-analyzer
+*.test
+*.out
+
+# Node and the frontend build
+node_modules/
+.svelte-kit/
+build/
+dist/
+
+# Local overrides. The committed `.env` holds the dev ports, which aren't secret.
+.env.local
+.env.*.local
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
