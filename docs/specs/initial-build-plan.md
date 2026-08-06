@@ -1,6 +1,7 @@
 # Initial build plan
 
-Status: M1 through M6 done, apart from creating the GitHub repo, which waits on David.
+Status: DELIVERED. Every milestone is done, the repo is public at https://github.com/vdavid/claude-session-analyzer, and
+CI is green.
 
 ## What we're building
 
@@ -388,7 +389,9 @@ What this turned up:
    compiled CSS emits a `color-mix()` behind `@supports`, and the sticky header had been relying on it all along.
 4. **The corpus counts had drifted**, which is expected: it grows while it's being measured. The docs now say so once,
    up front, rather than reading as three contradictory numbers.
-5. **Creating the GitHub repo is left to David.** It's the one step that puts something under his name where other
-   people can see it, and his own rule is that he reviews anything human-facing before that happens. The README is a
-   draft awaiting exactly that review, so publishing ahead of it would be the wrong order. One command does it, and it's
-   in the handover.
+5. **Publishing waited for David's word, and got it.** Creating the repo puts something under his name where other
+   people can see it, so it sat until he asked for it. The repo is public, CI runs `pnpm check` on every push to `main`
+   and every pull request, and the first run passed in 49 s.
+
+The README stands as David read it. He kept the limitations section as written, including the two-hour cap being called
+a guess.

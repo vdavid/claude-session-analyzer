@@ -1,5 +1,8 @@
 # Claude session analyzer
 
+[![CI](https://github.com/vdavid/claude-session-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/vdavid/claude-session-analyzer/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+
 Reconstructs where the time went in a Claude Code session: per agent, second by second, from the first prompt to the
 last tool result.
 
