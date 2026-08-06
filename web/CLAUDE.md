@@ -39,7 +39,7 @@ contract it consumes is `docs/api.md`; read that before touching anything that r
 build is not evidence the page works: drive it with `pnpm dev` against a real session before calling anything done.
 
 There's no automated accessibility or browser gate. When you touch layout or colour, run axe over both pages in both
-themes yourself, and **wait for the entrance animation to settle first** (`document.getAnimations()`), or the `.rise`
-fade reports thousands of contrast failures that aren't there once the page lands.
+themes yourself. **The `.rise` entrance animation moves and never fades**, because text composited mid-fade sits below
+AA contrast for as long as the fade runs. Don't add an `opacity` keyframe back.
 
 Deeper notes, including the design system and what each chart is for: `docs/frontend.md`.

@@ -63,6 +63,14 @@ What carries the personality is the treatment: tabular monospace numerals everyw
 letterspaced micro-labels for structure, and durations set as the page's structural typography. It also means the page
 looks right offline, which a local tool should.
 
+### The entrance animation moves and never fades
+
+Sections slide 6px into place, staggered, so the page assembles rather than blinking. They don't fade in, because a
+browser composites text at partial opacity against the canvas behind it: faint ink at 40% alpha measures around 2:1
+against paper, so a fade puts every word on the page under AA for as long as it runs. Someone reading during those
+420 ms is the person the contrast ratio is for. Transform costs nothing in contrast and reads the same. It's off
+entirely under `prefers-reduced-motion`.
+
 ### A thousand lanes
 
 The largest session on this machine has 983 lanes, 977 of them spawned by 12 workflows and every one of those named
