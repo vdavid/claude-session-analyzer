@@ -106,6 +106,105 @@ func TestRealSession(t *testing.T) {
 	}
 }
 
+// TestRealListing lists every session on this machine and checks the cheap path against the expensive one: a sample of
+// sessions gets fully parsed, and the listing has to agree with what the parse found. It also reports the wall clock,
+// which is the number the listing exists for. It skips unless you ask for it:
+//
+//	CSA_REAL_LIST=1 go test ./internal/session -run RealListing -v
+func TestRealListing(t *testing.T) {
+	if os.Getenv("CSA_REAL_LIST") == "" {
+		t.Skip("set CSA_REAL_LIST=1 to list every session on this machine")
+	}
+
+	root := os.Getenv("CSA_REAL_ROOT")
+	if root == "" {
+		var err error
+		if root, err = DefaultRoot(); err != nil {
+			t.Fatalf("default root: %v", err)
+		}
+	}
+
+	start := time.Now()
+	sums, err := List(root)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	elapsed := time.Since(start)
+
+	var bytes int64
+	var lanes, untitled, untimed int
+	for _, s := range sums {
+		bytes += s.Bytes
+		lanes += s.Lanes
+		if s.Title == "" {
+			untitled++
+		}
+		if s.Start.IsZero() {
+			untimed++
+		}
+	}
+	t.Logf("%d sessions, %d lanes, %.2f GB in %s", len(sums), lanes, float64(bytes)/(1<<30),
+		elapsed.Round(time.Millisecond))
+	t.Logf("%d sessions carry no title, %d carry no timestamped record", untitled, untimed)
+
+	// Every tenth session, fully parsed, has to agree with what the two ends reported.
+	checked := 0
+	for i := 0; i < len(sums); i += 10 {
+		sum := sums[i]
+		loc, err := Find(root, sum.ID)
+		if err != nil {
+			t.Errorf("find %s: %v", sum.ID, err)
+			continue
+		}
+		full, err := Load(loc, transcript.Options{MaxValueBytes: 64})
+		if err != nil {
+			t.Errorf("load %s: %v", sum.ID, err)
+			continue
+		}
+		checked++
+
+		if full.Title != sum.Title {
+			t.Errorf("%s: listing says title %q, a full parse says %q", sum.ID, sum.Title, full.Title)
+		}
+		if full.ProjectPath != sum.ProjectPath {
+			t.Errorf("%s: listing says project %q, a full parse says %q", sum.ID, sum.ProjectPath, full.ProjectPath)
+		}
+		if got := len(full.Lanes) - 1; got != sum.Lanes {
+			t.Errorf("%s: listing counted %d lanes, a full parse found %d", sum.ID, sum.Lanes, got)
+		}
+
+		var first, last time.Time
+		for _, rec := range full.Lead().Records {
+			if rec.Timestamp.IsZero() {
+				continue
+			}
+			if first.IsZero() {
+				first = rec.Timestamp
+			}
+			last = rec.Timestamp
+		}
+		if !first.Equal(sum.Start) {
+			t.Errorf("%s: listing says start %s, a full parse says %s", sum.ID, sum.Start, first)
+		}
+		if !last.Equal(sum.End) {
+			t.Errorf("%s: listing says end %s, a full parse says %s", sum.ID, sum.End, last)
+		}
+	}
+	t.Logf("%d sessions cross-checked against a full parse", checked)
+
+	for _, s := range sums[:min(10, len(sums))] {
+		t.Logf("  %s  %-24s %5d lanes  %8.1f MB  %s", s.Start.Format(time.RFC3339), truncateForLog(s.Title, 24),
+			s.Lanes, float64(s.Bytes)/(1<<20), s.ProjectSlug)
+	}
+}
+
+func truncateForLog(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n-1] + "…"
+}
+
 // TestRealCorpusSweep parses every transcript on this machine, which is how format drift gets caught early: a new
 // record type shows up as a skip, and anything the reader can't decode shows up as a malformed line. It skips unless
 // you ask for it, and it takes about half a minute over a few thousand transcripts:
