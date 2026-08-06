@@ -148,6 +148,9 @@ breakdown of **lane time**, so say so in the legend.
 - A field that doesn't apply is left out rather than sent empty: `tool` and `class` only appear on a tool call, a tool
   execution, or a stall, and `overlapped`, `timedOut`, and `isError` only when they're true.
 - `color` is what the terminal used and it's often missing, so the UI needs a palette of its own.
+- `line` is a line number inside one transcript file, and a lane is occasionally written across several of them
+  (`docs/transcript-format.md`), so two rows of the same lane can carry the same `line`. It's a pointer for tracing,
+  not a key.
 - `gaps` are the stretches a lane produced nothing: its waiting, `stalled`, and `API error` rows, in time order. A swimlane bar drawn
   solid from `from` to `until` would claim the lane was busy the whole time, and on the reference session's lead that
   would be a lie for 71 of its 73 hours. Each gap carries its own `kind`, so the four waits can be drawn apart.

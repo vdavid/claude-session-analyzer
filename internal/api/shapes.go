@@ -134,7 +134,8 @@ type rowBody struct {
 	Overlapped bool `json:"overlapped,omitempty"`
 	TimedOut   bool `json:"timedOut,omitempty"`
 	IsError    bool `json:"isError,omitempty"`
-	// Line is the 1-based line of the lane's transcript that closed the row, for tracing a row back to its source.
+	// Line is the 1-based line of the lane's transcript that closed the row, for tracing a row back to its source. A
+	// lane written across several files has one line numbering per file, so this isn't unique within a lane.
 	Line int `json:"line,omitempty"`
 }
 
