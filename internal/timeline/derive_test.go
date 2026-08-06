@@ -132,7 +132,7 @@ func TestDeriveWaitsBetweenTurns(t *testing.T) {
 
 	tl := Derive(sessionOf(lane), Options{})
 
-	requireKinds(t, tl.Rows, KindWriting, KindWaiting, KindWriting)
+	requireKinds(t, tl.Rows, KindWriting, KindWaitingForPerson, KindWriting)
 	checkTiling(t, tl.Rows, at(0), at(3610))
 	if got := tl.Rows[1].Duration(); got != time.Hour {
 		t.Errorf("the wait lasted %s, want 1h", got)
@@ -157,7 +157,7 @@ func TestDeriveIgnoresBookkeepingRecords(t *testing.T) {
 
 	tl := Derive(sessionOf(lane), Options{})
 
-	requireKinds(t, tl.Rows, KindWriting, KindWaiting, KindWaiting, KindWriting)
+	requireKinds(t, tl.Rows, KindWriting, KindWaitingForPerson, KindWaitingForPerson, KindWriting)
 	checkTiling(t, tl.Rows, at(0), at(75))
 	if got := tl.Rows[0].Duration(); got != 8*time.Second {
 		t.Errorf("the attachment should not have split the writing row, which lasted %s", got)
@@ -178,7 +178,7 @@ func TestDeriveClosesAnIdleTail(t *testing.T) {
 
 	tl := Derive(sessionOf(lane), Options{})
 
-	requireKinds(t, tl.Rows, KindWriting, KindWaiting)
+	requireKinds(t, tl.Rows, KindWriting, KindWaitingUnknown)
 	checkTiling(t, tl.Rows, at(0), at(400))
 }
 

@@ -69,7 +69,7 @@ func judge(c *call, opts Options) verdict {
 		// The call is open because a person hasn't answered yet. That's idle time, not a tool running and not a
 		// suspended agent: across every session on this machine, three of the five rows the stall rule flagged were
 		// questions left open for hours.
-		v.kind = KindWaiting
+		v.kind = KindWaitingForPerson
 		return v
 	}
 	if !c.resolved {

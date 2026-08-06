@@ -24,7 +24,7 @@ func TestCompactionIsItsOwnKind(t *testing.T) {
 
 	tl := Derive(sessionOf(lane), Options{})
 
-	requireKinds(t, tl.Rows, KindWriting, KindWaiting, KindCompacting, KindWriting)
+	requireKinds(t, tl.Rows, KindWriting, KindWaitingUnknown, KindCompacting, KindWriting)
 	checkTiling(t, tl.Rows, at(0), at(3005))
 
 	compaction := tl.Rows[2]
@@ -54,7 +54,7 @@ func TestCompactionWithoutADuration(t *testing.T) {
 
 	tl := Derive(sessionOf(lane), Options{})
 
-	requireKinds(t, tl.Rows, KindWriting, KindWaiting, KindCompacting, KindWriting)
+	requireKinds(t, tl.Rows, KindWriting, KindWaitingUnknown, KindCompacting, KindWriting)
 	checkTiling(t, tl.Rows, at(0), at(3005))
 	if got := tl.Rows[2].Duration(); got != 0 {
 		t.Errorf("with no duration reported the row should claim no time, got %s", got)

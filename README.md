@@ -29,15 +29,18 @@ and 3.5 GB in a quarter of a second, because it reads the two ends of each trans
 ## The CSV
 
 One row per stretch of one agent's wall clock, in six columns: `From`, `Until`, `Agent`, `Activity`, `Extra info`, and
-`Duration (s)`. `Activity` is one of thinking, writing, tool call, tool execution, waiting, stalled, or compacting.
-Within an agent the rows tile: each starts where the last ended, so nothing is unaccounted for and nothing is counted
-twice. What each activity means, and every judgement call behind it, is in `docs/timeline-rules.md`.
+`Duration (s)`. `Activity` is one of thinking, writing, tool call, tool execution, waiting for a person, waiting for a
+teammate, waiting for a background task, waiting with the reason unknown, stalled, or compacting. Waiting is four
+values rather than one because "71 hours of waiting" answers nothing, while knowing that 41 of those hours were on a
+person does. Within an agent the rows tile: each starts where the last ended, so nothing is unaccounted for and nothing
+is counted twice. What each activity means, and every judgement call behind it, is in `docs/timeline-rules.md`.
 
 ## How it works
 
 Claude Code writes one JSONL transcript per session under `~/.claude/projects/`, plus one per subagent it spawns. The
 engine streams those, pairs tool calls with their results, and turns the record stream into labelled spans of thinking,
-writing, tool calls, tool execution, waiting, and stalling.
+writing, tool calls, tool execution, waiting, and stalling. A wait is attributed to whatever ended it: a person, a
+teammate, or a background task.
 
 Nothing is uploaded, stored, or cached. It reads the files you already have and holds the result in memory.
 

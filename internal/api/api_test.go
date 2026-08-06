@@ -8,13 +8,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vdavid/claude-session-analyzer/internal/timeline"
 )
 
 const (
 	alphaID  = "11111111-1111-1111-1111-111111111111"
 	goldenID = "11111111-2222-3333-4444-555555555555"
 	// goldenRows and goldenLanes are what the derivation's golden CSV holds for the fixture session.
-	goldenRows  = 35
+	goldenRows  = 36
 	goldenLanes = 3
 )
 
@@ -241,7 +243,7 @@ func TestTimelineGapsAreTheStretchesALaneProducedNothing(t *testing.T) {
 	for _, lane := range got.Lanes {
 		for _, gap := range lane.Gaps {
 			gaps++
-			if gap.Kind != "waiting" && gap.Kind != "stalled" {
+			if !timeline.Kind(gap.Kind).IsGap() {
 				t.Errorf("lane %s: gap of kind %q, want the kinds where the lane produced nothing", lane.Name, gap.Kind)
 			}
 			found := false

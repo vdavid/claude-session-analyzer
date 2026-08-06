@@ -248,8 +248,8 @@ func TestAskingAPersonIsWaiting(t *testing.T) {
 		t.Run(tool, func(t *testing.T) {
 			row := oneCall(t, 26*time.Hour, blockSpec{tool: tool, key: "question", arg: "Which option?"}, "")
 
-			if row.Kind != KindWaiting {
-				t.Errorf("got %q, want waiting: %s", row.Kind, row.Info)
+			if row.Kind != KindWaitingForPerson {
+				t.Errorf("got %q, want a wait on a person: %s", row.Kind, row.Info)
 			}
 			if !strings.Contains(row.Info, "waiting for an answer to "+tool) {
 				t.Errorf("the row says %q, want it to name what the answer was for", row.Info)

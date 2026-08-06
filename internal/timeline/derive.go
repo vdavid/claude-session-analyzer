@@ -119,8 +119,8 @@ func (d *laneDeriver) run() []Row {
 			d.flush(ts)
 			if reason, idle := d.wasIdle(ts); idle {
 				// Nothing on record says when the lane started working again, so the stretch counts as idle and the
-				// block that closed it claims none of it.
-				d.emitWait(ts, reason, rec.Line)
+				// block that closed it claims none of it. Nothing says what it was waiting for either.
+				d.emitWait(ts, KindWaitingUnknown, reason, rec.Line)
 			}
 			d.state = laneWorking
 			d.emitResponse(rec, ts)
@@ -131,7 +131,8 @@ func (d *laneDeriver) run() []Row {
 
 		case rec.Type == transcript.TypeUser && isPrompt(rec):
 			d.flush(ts)
-			d.emitWait(ts, waitInfo(rec), rec.Line)
+			kind, info := waitedFor(rec)
+			d.emitWait(ts, kind, info, rec.Line)
 			d.state = laneWorking
 
 		case rec.Type == transcript.TypeQueueOperation && isEnqueue(rec) && len(d.batch) == 0:
@@ -143,7 +144,8 @@ func (d *laneDeriver) run() []Row {
 			// and with the turn ending as the only signal all of it counted as thinking. Input arriving while the
 			// agent is genuinely composing clips a few seconds off the front of that row instead, which is a bounded
 			// error where the other one has no bound.
-			d.emitWait(ts, waitInfo(rec), rec.Line)
+			kind, info := waitedFor(rec)
+			d.emitWait(ts, kind, info, rec.Line)
 			d.state = lanePending
 
 		case rec.Type == transcript.TypeSystem && rec.System != nil && isTurnEnd(rec.System.Subtype):
@@ -298,9 +300,9 @@ func (d *laneDeriver) wasIdle(ts time.Time) (string, bool) {
 	}
 }
 
-// emitWait closes an idle gap. A zero-length wait is dropped: the lane's very first record is a prompt, and a wait of
-// no time isn't worth a row.
-func (d *laneDeriver) emitWait(ts time.Time, info string, line int) {
+// emitWait closes an idle gap, in the kind that says what the lane was idle on. A zero-length wait is dropped: the
+// lane's very first record is a prompt, and a wait of no time isn't worth a row.
+func (d *laneDeriver) emitWait(ts time.Time, kind Kind, info string, line int) {
 	if !ts.After(d.cursor) {
 		return
 	}
@@ -309,7 +311,7 @@ func (d *laneDeriver) emitWait(ts time.Time, info string, line int) {
 		Until:  ts,
 		Agent:  d.lane.Name,
 		LaneID: d.lane.ID,
-		Kind:   KindWaiting,
+		Kind:   kind,
 		Info:   info,
 		Line:   line,
 	})
@@ -327,7 +329,7 @@ func (d *laneDeriver) closeTail() {
 		Until:  d.end,
 		Agent:  d.lane.Name,
 		LaneID: d.lane.ID,
-		Kind:   KindWaiting,
+		Kind:   KindWaitingUnknown,
 		Info:   "idle to the end of the transcript",
 	})
 	d.cursor = d.end
@@ -413,7 +415,7 @@ func (d *laneDeriver) emitCompaction(rec *transcript.Record, ts time.Time) {
 			Until:  start,
 			Agent:  d.lane.Name,
 			LaneID: d.lane.ID,
-			Kind:   KindWaiting,
+			Kind:   KindWaitingUnknown,
 			Info:   "idle until the context was compacted",
 			Line:   rec.Line,
 		})

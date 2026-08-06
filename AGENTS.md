@@ -33,8 +33,9 @@ Apache-2.0.
 - `internal/session/`: session discovery under `~/.claude/projects`, `Lane` (the lead plus one per subagent, each with
   its ordered records), and `List`, which summarizes every session on disk by reading only the two ends of each
   transcript.
-- `internal/timeline/`: `Lane` records become activity rows. The seven activity kinds, tool classification, stall and
-  timeout detection, and waiting attribution. Rules in `docs/timeline-rules.md`.
+- `internal/timeline/`: `Lane` records become activity rows. The activity kinds (`Kinds` lists them, four of them
+  waits), tool classification, stall and timeout detection, and waiting attribution. Rules in
+  `docs/timeline-rules.md`.
 - `internal/cli/`: the `sessions`, `timeline`, and `serve` subcommands. `cli.Run(args, stdout, stderr) int` is the whole
   surface, so it's tested without a process.
 - `internal/api/`: the HTTP handlers and the JSON shapes. Contract in `docs/api.md`.

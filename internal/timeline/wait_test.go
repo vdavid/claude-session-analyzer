@@ -19,16 +19,24 @@ func relayedTeammateMessage(from, body string) string {
 }
 
 // TestWaitNamesWhatEndedIt covers the column that makes the timeline worth reading: a lead's idle stretch says who it
-// was idle on.
+// was idle on, in the kind as well as in the info.
 func TestWaitNamesWhatEndedIt(t *testing.T) {
 	cases := []struct {
 		name string
 		end  string
+		kind Kind
 		want string
 	}{
-		{"a person typing", "Could you also check the other lane?", "waiting for the next prompt"},
-		{"a teammate replying", relayedTeammateMessage("m1-engine", "M1 is done."), "waiting for teammate m1-engine"},
-		{"a teammate writing to a subagent", teammateMessage("team-lead", "Stop editing."), "waiting for teammate team-lead"},
+		{"a person typing", "Could you also check the other lane?", KindWaitingForPerson,
+			"waiting for the next prompt"},
+		{"a teammate replying", relayedTeammateMessage("m1-engine", "M1 is done."), KindWaitingForTeammate,
+			"waiting for teammate m1-engine"},
+		{"a teammate writing to a subagent", teammateMessage("team-lead", "Stop editing."), KindWaitingForTeammate,
+			"waiting for teammate team-lead"},
+		// A notification arrives as a prompt as often as it arrives queued: 2,044 against 6,288 across the corpus
+		// (verified 2026-08-06), so watching only the queue would misfile a third of them as a person.
+		{"a background task reporting in", "<task-notification>\n<task-id>b19akwfoq</task-id>\n</task-notification>",
+			KindWaitingForTask, "waiting for a background task"},
 	}
 
 	for _, c := range cases {
@@ -42,7 +50,7 @@ func TestWaitNamesWhatEndedIt(t *testing.T) {
 				done()
 
 			rows := Derive(sessionOf(lane), Options{}).Rows
-			wait := rowOfKind(t, rows, KindWaiting)
+			wait := rowOfKind(t, rows, c.kind)
 			if !strings.HasPrefix(wait.Info, c.want) {
 				t.Errorf("the wait says %q, want it to start with %q", wait.Info, c.want)
 			}
@@ -50,6 +58,46 @@ func TestWaitNamesWhatEndedIt(t *testing.T) {
 				t.Errorf("the wait lasted %s, want the whole stretch from the last block to the prompt", got)
 			}
 		})
+	}
+}
+
+// TestWaitKindsAreSeparateBuckets covers the split itself: one session's waits land in different kinds, so a pie has a
+// slice per thing waited on and a spreadsheet can group by the Activity column. Before the split, all four of these
+// rows said "waiting" and the difference lived in a substring of the info.
+func TestWaitKindsAreSeparateBuckets(t *testing.T) {
+	lane := newLane("lead", true).
+		add(0, promptRec("go")).
+		add(5, assistantRec(textBlock("spawned the worker and started the build"))).
+		add(6, systemRec("turn_duration")).
+		add(100, queueRec("enqueue", "<task-notification>\n<task-id>b19akwfoq</task-id>\n</task-notification>")).
+		add(110, assistantRec(textBlock("the build finished"))).
+		add(111, systemRec("turn_duration")).
+		add(200, promptRec(relayedTeammateMessage("worker", "M1 is done."))).
+		add(210, assistantRec(textBlock("thanks"))).
+		add(211, systemRec("turn_duration")).
+		add(300, promptRec("carry on")).
+		add(310, assistantRec(textBlock("carrying on"))).
+		// No turn end, no input: nothing on record says what this gap was waiting for.
+		add(4000, assistantRec(textBlock("back again"))).
+		done()
+
+	rows := Derive(sessionOf(lane), Options{}).Rows
+
+	requireKinds(t, rows,
+		KindWriting, KindWaitingForTask, KindWriting, KindWaitingForTeammate, KindWriting,
+		KindWaitingForPerson, KindWriting, KindWaitingUnknown, KindWriting)
+	checkTiling(t, rows, at(0), at(4000))
+
+	totals := (&Timeline{Rows: rows}).TotalsByKind()
+	for kind, want := range map[Kind]time.Duration{
+		KindWaitingForTask:     95 * time.Second,
+		KindWaitingForTeammate: 90 * time.Second,
+		KindWaitingForPerson:   90 * time.Second,
+		KindWaitingUnknown:     3690 * time.Second,
+	} {
+		if got := totals[kind]; got != want {
+			t.Errorf("%s totals %s, want %s:\n%s", kind, FormatDuration(got), FormatDuration(want), dump(rows))
+		}
 	}
 }
 
@@ -68,7 +116,7 @@ func TestWaitEndsWhenQueuedInputArrives(t *testing.T) {
 
 	rows := Derive(sessionOf(lane), Options{}).Rows
 
-	requireKinds(t, rows, KindWriting, KindWaiting, KindThinking, KindWriting)
+	requireKinds(t, rows, KindWriting, KindWaitingForTask, KindThinking, KindWriting)
 	if got := rows[1].Duration(); got != 895*time.Second {
 		t.Errorf("the wait lasted %s, want it to end when the notification arrived", got)
 	}
@@ -94,7 +142,7 @@ func TestSilentResumeIsNotThinking(t *testing.T) {
 
 	rows := Derive(sessionOf(lane), Options{}).Rows
 
-	requireKinds(t, rows, KindWriting, KindWaiting, KindThinking, KindWriting)
+	requireKinds(t, rows, KindWriting, KindWaitingUnknown, KindThinking, KindWriting)
 	if got := rows[1].Duration(); got != 49995*time.Second {
 		t.Errorf("the wait lasted %s, want the whole stretch to the resumed block", got)
 	}
@@ -143,7 +191,7 @@ func TestLeadWaitNamesLiveTeammates(t *testing.T) {
 		done()
 
 	rows := Derive(sessionOf(lead, engine, late), Options{}).Rows
-	wait := rowOfKind(t, rows, KindWaiting)
+	wait := rowOfKind(t, rows, KindWaitingForTeammate)
 
 	if !strings.Contains(wait.Info, "1 teammate alive: m1-engine") {
 		t.Errorf("the wait says %q, want it to name the teammate that was alive", wait.Info)
@@ -173,7 +221,7 @@ func TestLeadWaitCountsCrowdedSessions(t *testing.T) {
 	}
 
 	rows := Derive(sessionOf(lanes...), Options{}).Rows
-	wait := rowOfKind(t, rows, KindWaiting)
+	wait := rowOfKind(t, rows, KindWaitingForPerson)
 
 	if !strings.Contains(wait.Info, "7 teammates alive") {
 		t.Errorf("the wait says %q, want the count of teammates", wait.Info)
@@ -198,7 +246,7 @@ func TestSubagentWaitsAreNotAnnotated(t *testing.T) {
 		done()
 
 	rows := Derive(sessionOf(lead, worker), Options{}).Rows
-	wait := rowOfKindIn(t, rows, KindWaiting, "worker")
+	wait := rowOfKindIn(t, rows, KindWaitingForTeammate, "worker")
 
 	if strings.Contains(wait.Info, "alive") {
 		t.Errorf("a subagent's wait shouldn't list the session's other lanes: %q", wait.Info)
@@ -263,7 +311,7 @@ func TestQueuedInputSplitsEvenWithoutATurnEnding(t *testing.T) {
 
 	rows := Derive(sessionOf(lane), Options{}).Rows
 
-	requireKinds(t, rows, KindWriting, KindWaiting, KindThinking, KindWriting)
+	requireKinds(t, rows, KindWriting, KindWaitingForPerson, KindThinking, KindWriting)
 	checkTiling(t, rows, at(0), at(26610))
 	if got := rows[1].Duration(); got != 26595*time.Second {
 		t.Errorf("the wait lasted %s, want the whole stretch until the input arrived", got)
@@ -286,7 +334,7 @@ func TestImplausiblyLongResponseIsIdleTime(t *testing.T) {
 
 	rows := Derive(sessionOf(lane), Options{}).Rows
 
-	requireKinds(t, rows, KindWriting, KindWaiting, KindWriting, KindWriting)
+	requireKinds(t, rows, KindWriting, KindWaitingUnknown, KindWriting, KindWriting)
 	checkTiling(t, rows, at(0), at(2200010))
 	if rows[2].Duration() != 0 {
 		t.Errorf("the block that closed the gap can't claim it: %s", rowSummary(rows[2]))

@@ -21,9 +21,22 @@ const (
 	// KindToolExecution is the tool running, from the tool_use block until its result came back. This is the honest
 	// wall clock of the tool, including anything the tool waited on.
 	KindToolExecution Kind = "tool execution"
-	// KindWaiting is an idle gap: the lane produced nothing, because it was waiting on a person, on a teammate, or on
-	// a background task.
-	KindWaiting Kind = "waiting"
+	// The four waits below are idle gaps: the lane produced nothing, and the kind says what it was idle on. They're
+	// separate kinds rather than one, because "71 hours of waiting" answers nothing while "41 hours on a person, 16 on
+	// background tasks, 14 on teammates" answers the question that gets asked. Each one is named for what was waited
+	// on rather than for who waited, so a subagent's wait and a lead's wait land in the same bucket.
+
+	// KindWaitingForPerson is a gap a person closed: a prompt typed or queued, or an answer to a question the agent
+	// asked.
+	KindWaitingForPerson Kind = "waiting for a person"
+	// KindWaitingForTeammate is a gap another agent's message closed, read off the envelope the harness wraps it in.
+	KindWaitingForTeammate Kind = "waiting for a teammate"
+	// KindWaitingForTask is a gap a background task's notification closed: a build, a test suite, or a poll loop the
+	// agent had left running.
+	KindWaitingForTask Kind = "waiting for a background task"
+	// KindWaitingUnknown is a gap with nothing on record saying what it was waiting for. The lane went quiet and later
+	// produced something, and no input, message, or notification sits between the two.
+	KindWaitingUnknown Kind = "waiting, reason unknown"
 	// KindStalled is a tool result that arrived far too late for what the tool was doing. The agent was suspended, not
 	// working. See stall.go for how far is too far and why.
 	KindStalled Kind = "stalled"
@@ -34,10 +47,27 @@ const (
 	KindCompacting Kind = "compacting"
 )
 
-// Kinds lists every activity kind, in the order a legend should show them.
+// Kinds lists every activity kind, in the order a legend should show them: what the agent did, then what it waited
+// for, then the ways time goes somewhere else.
 var Kinds = []Kind{
-	KindThinking, KindWriting, KindToolCall, KindToolExecution, KindWaiting, KindStalled, KindCompacting,
+	KindThinking, KindWriting, KindToolCall, KindToolExecution,
+	KindWaitingForPerson, KindWaitingForTeammate, KindWaitingForTask, KindWaitingUnknown,
+	KindStalled, KindCompacting,
 }
+
+// IsWaiting says the kind is one of the waits, whatever it was waiting on. Code that means "idle" should ask this
+// rather than list the four kinds, so a fifth one can't be missed.
+func (k Kind) IsWaiting() bool {
+	switch k {
+	case KindWaitingForPerson, KindWaitingForTeammate, KindWaitingForTask, KindWaitingUnknown:
+		return true
+	}
+	return false
+}
+
+// IsGap says the lane produced nothing during the row: it was waiting, or it was suspended. These are the holes in a
+// swimlane, and drawing a lane solid across one would claim it was busy when it wasn't.
+func (k Kind) IsGap() bool { return k.IsWaiting() || k == KindStalled }
 
 // Row is one stretch of one lane's wall clock.
 type Row struct {

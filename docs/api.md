@@ -97,7 +97,7 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
           "from": "2026-08-03T08:42:19.17Z",
           "until": "2026-08-03T08:44:16.703Z",
           "seconds": 117.533,
-          "kind": "waiting",
+          "kind": "waiting for a person",
           "info": "waiting for the next prompt"
         }
       ]
@@ -148,12 +148,13 @@ breakdown of **lane time**, so say so in the legend.
 - A field that doesn't apply is left out rather than sent empty: `tool` and `class` only appear on a tool call, a tool
   execution, or a stall, and `overlapped`, `timedOut`, and `isError` only when they're true.
 - `color` is what the terminal used and it's often missing, so the UI needs a palette of its own.
-- `gaps` are the stretches a lane produced nothing: its `waiting` and `stalled` rows, in time order. A swimlane bar
-  drawn solid from `from` to `until` would claim the lane was busy the whole time, and on the reference session's lead
-  that would be a lie for 71 of its 73 hours.
+- `gaps` are the stretches a lane produced nothing: its waiting and `stalled` rows, in time order. A swimlane bar drawn
+  solid from `from` to `until` would claim the lane was busy the whole time, and on the reference session's lead that
+  would be a lie for 71 of its 73 hours. Each gap carries its own `kind`, so the four waits can be drawn apart.
 - `byKind` lists only the kinds with rows behind them, in the order a legend should show them: `thinking`, `writing`,
-  `tool call`, `tool execution`, `waiting`, `stalled`, `compacting`. What each one means, and what it includes:
-  `docs/timeline-rules.md`.
+  `tool call`, `tool execution`, `waiting for a person`, `waiting for a teammate`, `waiting for a background task`,
+  `waiting, reason unknown`, `stalled`, `compacting`. Waiting is four kinds rather than one, so a pie has a slice per
+  thing waited on. What each one means, and what it includes: `docs/timeline-rules.md`.
 - `rows` are sorted by start across every lane. `overlapped` marks the only rows that don't tile their lane: a batch of
   parallel tool calls genuinely ran at once.
 

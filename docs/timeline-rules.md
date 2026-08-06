@@ -28,13 +28,27 @@ no gaps and no negative durations (verified 2026-08-06, `TestRealTimelineSweep`)
   thinking block came first, this span carries the whole response latency, the same caveat `thinking` has.
 - **tool execution**: the tool running, from the `tool_use` block until its result came back. This is the honest wall
   clock of the tool, including whatever the tool itself waited on.
-- **waiting**: the lane produced nothing, because it was idle on a person, a teammate, or a background task.
+- **waiting for a person**: the lane produced nothing until a person typed, queued a prompt, or answered a question the
+  agent asked.
+- **waiting for a teammate**: another agent's message closed the gap.
+- **waiting for a background task**: a background task's notification closed the gap.
+- **waiting, reason unknown**: the lane went quiet and later produced something, with no input, message, or
+  notification between the two.
 - **stalled**: a result that arrived far too late for what the call was doing. The agent was suspended, not working.
 - **compacting**: the harness compacting the context.
 
-`compacting` is a seventh kind the original plan didn't have. Compaction took 132 s in the reference session; it isn't
-the agent thinking, it isn't a tool running, and folding it into `waiting` would call two minutes of real work
-idleness.
+`Kind.IsWaiting()` is the four waits, and `Kind.IsGap()` adds `stalled`: everything where the lane produced nothing,
+which is what a swimlane draws as a hole. Ask those rather than listing kinds, so a new one can't be missed.
+
+`compacting` is a kind the original plan didn't have. Compaction took 132 s in the reference session, and it's neither
+the agent thinking nor a tool running, so folding it into a wait would call two minutes of real work idleness.
+
+### Why waiting is four kinds and not one
+
+One bucket answers nothing. The reference session's lead sat idle for 71h24m, and "71 hours of waiting" is not a
+finding: the split is, because it says the session was blocked on its human far more than on its agents. Naming them
+for what was waited on rather than for who waited keeps a subagent's four minutes of waiting in the same buckets as the
+lead's 71 hours.
 
 ## The cursor, and why timestamps can't be trusted
 
@@ -118,9 +132,21 @@ would put an ordinary two-minute command on the line.
 The thinking text is stripped from 5,469 of 5,471 sampled blocks. Where it survives the row quotes it; everywhere else
 the row borrows from what the agent did next, always starting with "before", so a reader can tell a quote from a guess.
 
-### Waiting rows name what ended them
+### A wait is attributed by the record that ended it
 
-A teammate (read from the harness's envelope, which carries the sender's id), a background task, or a person typing.
+The record that arrived is the signal: a teammate's message (read from the harness's envelope, which carries the
+sender's id), a background task's notification, or a person's prompt. So a notification landing while four teammates
+are alive is a background task's wait, not theirs, and a wait nothing arrived to end is `waiting, reason unknown`
+rather than a guess.
+
+That leaves no ambiguity to resolve: across the corpus's 12,437 envelope-carrying records, not one carries both
+envelopes (verified 2026-08-06). A notification arrives as a plain prompt about a third of the time (2,044 against
+6,288 queued), so both paths are read the same way.
+
+The envelope is only looked for in the first 200 characters, which is the message's own wrapper rather than something
+it quotes. Three enqueued messages in the corpus carry a notification past that point and are read as a person's
+prompt, which is the deliberate side of that trade.
+
 Lead waits also list the teammates alive at the time, which is the difference between "blocked on four agents" and
 "blocked on nobody". It's a sweep over lanes sorted by start with a heap of the ones still running, because one session
 in the corpus has 977 workflow lanes and a scan per row would not do.

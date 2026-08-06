@@ -45,7 +45,7 @@ func TestRealTimeline(t *testing.T) {
 	}
 	t.Log("per lane, alive for and busy with:")
 	for _, lane := range tl.Lanes {
-		busy := byLane[lane.Name] - laneKindTotal(tl, lane.ID, KindWaiting)
+		busy := byLane[lane.Name] - laneWaitTotal(tl, lane.ID)
 		t.Logf("  %-24s alive %10s, working %10s, %d rows",
 			lane.Name, FormatDuration(lane.Duration()), FormatDuration(busy), lane.Rows)
 	}
@@ -280,10 +280,11 @@ func realRoot(t *testing.T) string {
 	return root
 }
 
-func laneKindTotal(tl *Timeline, laneID string, kind Kind) time.Duration {
+// laneWaitTotal is how long one lane spent idle, whatever it was idle on.
+func laneWaitTotal(tl *Timeline, laneID string) time.Duration {
 	var total time.Duration
 	for _, r := range tl.Rows {
-		if r.LaneID == laneID && r.Kind == kind {
+		if r.LaneID == laneID && r.Kind.IsWaiting() {
 			total += r.Duration()
 		}
 	}

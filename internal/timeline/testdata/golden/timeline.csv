@@ -3,7 +3,7 @@ From,Until,Agent,Activity,Extra info,Duration (s)
 2026-08-03T12:00:12.000Z,2026-08-03T12:00:13.000Z,lead,tool call,Agent (agent): Build the engine,1.000
 2026-08-03T12:00:13.000Z,2026-08-03T12:00:14.000Z,lead,tool execution,Agent (agent): Build the engine; spawned teammate worker (claude-opus-5),1.000
 2026-08-03T12:00:14.000Z,2026-08-03T12:00:18.000Z,lead,writing,Spawned the worker.,4.000
-2026-08-03T12:00:18.000Z,2026-08-03T12:30:00.000Z,lead,waiting,"waiting for a background task; 2 teammates alive: a9f8e7d6c5b4, worker",1782.000
+2026-08-03T12:00:18.000Z,2026-08-03T12:30:00.000Z,lead,waiting for a background task,"waiting for a background task; 2 teammates alive: a9f8e7d6c5b4, worker",1782.000
 2026-08-03T12:00:20.000Z,2026-08-03T12:00:30.000Z,worker,thinking,"before Bash (wait): until pgrep -f ""target/debug/app"" > /dev/null; do sleep 3; done; echo RUNNING",10.000
 2026-08-03T12:00:30.000Z,2026-08-03T12:00:31.000Z,worker,tool call,"Bash (wait): until pgrep -f ""target/debug/app"" > /dev/null; do sleep 3; done; echo RUNNING",1.000
 2026-08-03T12:00:31.000Z,2026-08-03T12:10:31.000Z,worker,tool execution,"Bash (wait): until pgrep -f ""target/debug/app"" > /dev/null; do sleep 3; done; echo RUNNING; timed out after 10m00s",600.000
@@ -20,16 +20,17 @@ From,Until,Agent,Activity,Extra info,Duration (s)
 2026-08-03T12:30:05.000Z,2026-08-03T12:30:06.000Z,lead,tool call,Bash (checker): git add -A && pnpm check -q clippy svelte-check,1.000
 2026-08-03T12:30:06.000Z,2026-08-03T12:35:00.000Z,lead,tool execution,Bash (checker): git add -A && pnpm check -q clippy svelte-check,294.000
 2026-08-03T12:35:00.000Z,2026-08-03T12:35:05.000Z,lead,writing,Checks are green.,5.000
-2026-08-03T12:35:05.000Z,2026-08-03T14:30:00.000Z,lead,waiting,waiting for teammate worker; 1 teammate alive: worker,6895.000
+2026-08-03T12:35:05.000Z,2026-08-03T14:30:00.000Z,lead,waiting for a teammate,waiting for teammate worker; 1 teammate alive: worker,6895.000
 2026-08-03T14:30:00.000Z,2026-08-03T14:30:03.000Z,lead,thinking,before Read (file read): /tmp/project/notes.md,3.000
 2026-08-03T14:30:03.000Z,2026-08-03T14:30:03.000Z,lead,tool call,Read (file read): /tmp/project/notes.md,0.000
 2026-08-03T14:30:03.000Z,2026-08-03T14:30:03.000Z,lead,tool call,Read (file read): /tmp/project/plan.md,0.000
 2026-08-03T14:30:03.000Z,2026-08-03T14:30:05.000Z,lead,tool execution,Read (file read): /tmp/project/notes.md; one of 2 calls running at once,2.000
 2026-08-03T14:30:03.000Z,2026-08-03T14:30:08.000Z,lead,tool execution,Read (file read): /tmp/project/plan.md; one of 2 calls running at once,5.000
-2026-08-03T14:30:08.000Z,2026-08-03T14:31:07.984Z,lead,waiting,idle until the context was compacted; 1 teammate alive: worker,59.984
+2026-08-03T14:30:08.000Z,2026-08-03T14:31:07.984Z,lead,"waiting, reason unknown",idle until the context was compacted; 1 teammate alive: worker,59.984
 2026-08-03T14:31:07.984Z,2026-08-03T14:33:20.000Z,lead,compacting,"compacted 674,475 tokens down to 10,198 (manual)",132.016
 2026-08-03T14:33:20.000Z,2026-08-03T14:33:30.000Z,lead,writing,Carrying on.,10.000
-2026-08-03T14:33:30.000Z,2026-08-03T14:35:00.000Z,lead,waiting,idle to the end of the transcript; 1 teammate alive: worker,90.000
+2026-08-03T14:33:30.000Z,2026-08-03T14:34:00.000Z,lead,waiting for a person,waiting for the next prompt; 1 teammate alive: worker,30.000
+2026-08-03T14:34:00.000Z,2026-08-03T14:35:00.000Z,lead,"waiting, reason unknown",idle to the end of the transcript; 1 teammate alive: worker,60.000
 2026-08-03T18:25:40.000Z,2026-08-03T18:25:50.000Z,worker,writing,"Cleaned up, and I've been gone a while.",10.000
 2026-08-03T18:25:50.000Z,2026-08-03T18:26:00.000Z,worker,tool call,Bash (build): cargo build --release,10.000
 2026-08-03T18:26:00.000Z,2026-08-03T19:06:00.000Z,worker,tool execution,Bash (build): cargo build --release,2400.000

@@ -218,7 +218,7 @@ func buildTimeline(sum session.Summary, tl *timeline.Timeline, withRows bool) ti
 		if agg, ok := aggs[r.LaneID]; ok {
 			agg.rows++
 			add(agg.byKind, r)
-			if r.Kind == timeline.KindWaiting || r.Kind == timeline.KindStalled {
+			if r.Kind.IsGap() {
 				agg.gaps = append(agg.gaps, gapBody{
 					From:    r.From.UTC(),
 					Until:   r.Until.UTC(),

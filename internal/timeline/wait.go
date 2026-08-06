@@ -20,8 +20,12 @@ const (
 	envelopeSearchLimit = 200
 )
 
-// waitInfo says what a lane was waiting for, read off whatever ended the wait.
-func waitInfo(rec *transcript.Record) string {
+// waitedFor says what a lane was waiting for, read off whatever ended the wait: the record that arrived is the signal,
+// so a notification landing while teammates are alive is a background task's wait and not theirs.
+//
+// The two envelopes never share a message. Across the corpus's 12,437 envelope-carrying records, not one carries both
+// (verified 2026-08-06), so the order these are checked in doesn't decide anything.
+func waitedFor(rec *transcript.Record) (Kind, string) {
 	text := rec.Prompt
 	if text == "" && rec.Queue != nil {
 		text = rec.Queue.Content
@@ -36,15 +40,15 @@ func waitInfo(rec *transcript.Record) string {
 	}
 
 	if from, ok := teammateSender(text); ok {
-		return "waiting for teammate " + from
+		return KindWaitingForTeammate, "waiting for teammate " + from
 	}
 	if strings.Contains(head(text), taskEnvelope) {
-		return "waiting for a background task"
+		return KindWaitingForTask, "waiting for a background task"
 	}
 	if rec.Type == transcript.TypeQueueOperation {
-		return "waiting for the next prompt, which arrived queued"
+		return KindWaitingForPerson, "waiting for the next prompt, which arrived queued"
 	}
-	return "waiting for the next prompt"
+	return KindWaitingForPerson, "waiting for the next prompt"
 }
 
 // teammateSender reads the sender out of a teammate message's envelope.
@@ -119,7 +123,7 @@ func nameWaits(tl *Timeline, opts Options) {
 	live := &laneHeap{}
 	for i := range tl.Rows {
 		row := &tl.Rows[i]
-		if row.Kind != KindWaiting || row.LaneID != leadID {
+		if !row.Kind.IsWaiting() || row.LaneID != leadID {
 			continue
 		}
 
