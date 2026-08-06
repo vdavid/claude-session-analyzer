@@ -37,6 +37,10 @@ const (
 	// KindWaitingUnknown is a gap with nothing on record saying what it was waiting for. The lane went quiet and later
 	// produced something, and no input, message, or notification sits between the two.
 	KindWaitingUnknown Kind = "waiting, reason unknown"
+	// KindAPIError is a request the API didn't answer: an outage, a rate limit, an expired login, or a refusal. The
+	// span is the harness retrying, which is time the session lost through no fault of the agent, and long enough to be
+	// filed as idle time if nothing named it. See apierror.go.
+	KindAPIError Kind = "API error"
 	// KindStalled is a tool result that arrived far too late for what the tool was doing. The agent was suspended, not
 	// working. See stall.go for how far is too far and why.
 	KindStalled Kind = "stalled"
@@ -48,11 +52,11 @@ const (
 )
 
 // Kinds lists every activity kind, in the order a legend should show them: what the agent did, then what it waited
-// for, then the ways time goes somewhere else.
+// for, then the three ways time goes somewhere else.
 var Kinds = []Kind{
 	KindThinking, KindWriting, KindToolCall, KindToolExecution,
 	KindWaitingForPerson, KindWaitingForTeammate, KindWaitingForTask, KindWaitingUnknown,
-	KindStalled, KindCompacting,
+	KindAPIError, KindStalled, KindCompacting,
 }
 
 // IsWaiting says the kind is one of the waits, whatever it was waiting on. Code that means "idle" should ask this
@@ -65,9 +69,9 @@ func (k Kind) IsWaiting() bool {
 	return false
 }
 
-// IsGap says the lane produced nothing during the row: it was waiting, or it was suspended. These are the holes in a
-// swimlane, and drawing a lane solid across one would claim it was busy when it wasn't.
-func (k Kind) IsGap() bool { return k.IsWaiting() || k == KindStalled }
+// IsGap says the lane produced nothing during the row: it was waiting, suspended, or held up by the API. These are the
+// holes in a swimlane, and drawing a lane solid across one would claim it was busy when it wasn't.
+func (k Kind) IsGap() bool { return k.IsWaiting() || k == KindStalled || k == KindAPIError }
 
 // Row is one stretch of one lane's wall clock.
 type Row struct {

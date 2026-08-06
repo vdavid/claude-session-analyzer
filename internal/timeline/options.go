@@ -16,6 +16,16 @@ import "time"
 // minute and not one past twenty.
 const DefaultMaxResponseSpan = 15 * time.Minute
 
+// DefaultMaxAPIErrorSpan is the longest stretch before a failed request that counts as the harness retrying, rather
+// than as the lane having sat idle before the request was ever made.
+//
+// The transcript records the failure and nothing else: no retry is written down, and no transcript in the corpus holds
+// two error records in a row, so the gap before one is all there is to measure the outage by. That gap is under a
+// minute for 191 of the 245 and its longest is 1h19m (verified 2026-08-06). Two hours sits above the worst case seen
+// and far below the one this guards: a session resumed weeks later whose first request fails on a login that expired
+// while it sat there, which is idle time with an error at the end of it, not a fortnight of outage.
+const DefaultMaxAPIErrorSpan = 2 * time.Hour
+
 // Options tunes the derivation. The zero value is the one to use unless you're deliberately loosening a heuristic.
 type Options struct {
 	// CheapStall and HeavyStall are how long a tool result may take before the row is called a stall rather than a
@@ -28,6 +38,9 @@ type Options struct {
 	// MaxResponseSpan is how long one model response may plausibly take, queue time included, before the stretch is
 	// read as the lane sitting idle instead. See DefaultMaxResponseSpan.
 	MaxResponseSpan time.Duration
+	// MaxAPIErrorSpan caps how much of the stretch before a failed request counts as the outage. See
+	// DefaultMaxAPIErrorSpan.
+	MaxAPIErrorSpan time.Duration
 }
 
 func (o Options) withDefaults() Options {
@@ -42,6 +55,9 @@ func (o Options) withDefaults() Options {
 	}
 	if o.MaxResponseSpan == 0 {
 		o.MaxResponseSpan = DefaultMaxResponseSpan
+	}
+	if o.MaxAPIErrorSpan == 0 {
+		o.MaxAPIErrorSpan = DefaultMaxAPIErrorSpan
 	}
 	return o
 }

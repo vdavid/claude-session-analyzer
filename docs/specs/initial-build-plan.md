@@ -291,3 +291,22 @@ What the plan got wrong or missed here:
 
 For M5: `docs/api.md` is the contract. Group rows by `laneId`, never by `agent`; draw the swimlane from `lanes[].gaps`
 rather than one solid bar; and label the pie as a breakdown of lane time, not of the session's wall clock.
+
+**The kinds were fixed before M5 built a legend against them.** Waiting split into four kinds (a person, a teammate, a
+background task, and an unattributed residual), and `API error` joined them. Rules and evidence:
+`docs/timeline-rules.md`.
+
+What this turned up:
+
+1. **One waiting bucket hid the answer.** The reference session's 71h43m of waiting is 41h11m on a person, 16h12m on
+   background tasks, 14h04m on teammates, and 16m of residual. The residual is small because a wait almost always ends
+   at a record that names what it was waiting for.
+2. **A failed API request was reported as the agent writing.** The harness writes it as an assistant record with a text
+   block, so the error message read as prose, and a long enough outage tripped the 15-minute backstop and read as idle
+   instead. 241 rows across the corpus now say `API error`, the longest 1h19m.
+3. **The transcript never records a retry.** No transcript holds two error records in a row, so the gap before one is
+   the only measure of an outage there is, and the span is capped at two hours rather than trusted.
+4. **452 subagent lanes are invisible to the tool**, in 57 sessions. A session that entered a git worktree keeps its
+   lead transcript under the original project slug while its `<session-id>/subagents/` directory is written under the
+   worktree's slug, and `session.Find` only reads the directory sitting next to the lead. Everything those lanes did is
+   missing from their session's timeline. Worth fixing, and not part of this change.

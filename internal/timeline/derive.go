@@ -98,8 +98,10 @@ type laneDeriver struct {
 	end    time.Time
 	rows   []Row
 
-	// state says whether the time passing is the lane working or the lane idle.
-	state laneState
+	// state says whether the time passing is the lane working or the lane idle, and idleReason says what put it there,
+	// which is all an idle row can say about itself.
+	state      laneState
+	idleReason string
 
 	// open holds the calls of the current batch that haven't come back yet, and batch holds the whole batch in the
 	// order it was issued. Both empty out together.
@@ -115,6 +117,12 @@ func (d *laneDeriver) run() []Row {
 		ts := d.forward(rec.Timestamp)
 
 		switch {
+		case rec.Type == transcript.TypeAssistant && rec.APIError != nil:
+			// An assistant record, text block and all, but the harness wrote it rather than the model. It has to be
+			// matched before the case below, which would otherwise call the error message the agent writing prose.
+			d.flush(ts)
+			d.emitAPIError(rec, ts)
+
 		case rec.Type == transcript.TypeAssistant && len(rec.Blocks) > 0:
 			d.flush(ts)
 			if reason, idle := d.wasIdle(ts); idle {
@@ -149,7 +157,7 @@ func (d *laneDeriver) run() []Row {
 			d.state = lanePending
 
 		case rec.Type == transcript.TypeSystem && rec.System != nil && isTurnEnd(rec.System.Subtype):
-			d.state = laneIdle
+			d.goIdle("idle after the turn ended")
 
 		case rec.Type == transcript.TypeSystem && rec.System != nil && rec.System.Subtype == compactBoundary:
 			d.flush(ts)
@@ -286,18 +294,25 @@ func (d *laneDeriver) flush(ts time.Time) {
 
 // wasIdle says the stretch ending now was the lane sitting idle rather than the model working, and why.
 //
-// There are two ways to tell. The turn ended and nothing has arrived since, which is evidence. Or the stretch is
-// longer than a model response can be, which is the backstop for lanes carrying no evidence at all: a session left
-// after `/exit` and resumed 25 days later has nothing between the two but a text block.
+// There are two ways to tell. The lane stopped and nothing has arrived since, which is evidence and carries its own
+// reason (a turn ending, or a request the API refused). Or the stretch is longer than a model response can be, which is
+// the backstop for lanes carrying no evidence at all: a session left after `/exit` and resumed 25 days later has
+// nothing between the two but a text block.
 func (d *laneDeriver) wasIdle(ts time.Time) (string, bool) {
 	switch {
 	case d.state == laneIdle:
-		return "idle after the turn ended", true
+		return d.idleReason, true
 	case ts.Sub(d.cursor) > d.opts.MaxResponseSpan:
 		return "idle, with nothing on record saying when the lane started working again", true
 	default:
 		return "", false
 	}
+}
+
+// goIdle marks the lane as having stopped, and why. The reason is what an idle row that nothing else explains says
+// about itself, so the two always move together.
+func (d *laneDeriver) goIdle(reason string) {
+	d.state, d.idleReason = laneIdle, reason
 }
 
 // emitWait closes an idle gap, in the kind that says what the lane was idle on. A zero-length wait is dropped: the

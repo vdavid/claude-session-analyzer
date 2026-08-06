@@ -168,3 +168,17 @@ func dump(rows []Row) string {
 	}
 	return out
 }
+
+// apiErrorRec is the record the harness writes when the API doesn't answer: an assistant record carrying prose for the
+// person at the terminal, plus the typed fields that say it wasn't the agent writing. A status of zero is a record
+// that carried none, which is 76 of the corpus's 245.
+func apiErrorRec(kind string, status int, text string) *transcript.Record {
+	rec := &transcript.Record{
+		Type:     transcript.TypeAssistant,
+		APIError: &transcript.APIError{Kind: kind, Status: status},
+	}
+	if text != "" {
+		rec.Blocks = []transcript.Block{textBlock(text)}
+	}
+	return rec
+}

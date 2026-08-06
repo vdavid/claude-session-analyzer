@@ -15,7 +15,7 @@ duration. The engine hands back rows plus a span per lane; the CLI writes the CS
 started, and the last ends when the lane ended. Nothing is unaccounted for and nothing is counted twice. The only
 exception is a batch of parallel tool calls, which genuinely overlap, and every row of one says so in `Overlapped`.
 
-The property holds across every session on the machine this was built against: 720 sessions, 3,879 lanes, 775,849 rows,
+The property holds across every session on the machine this was built against: 724 sessions, 3,889 lanes, 780,673 rows,
 no gaps and no negative durations (verified 2026-08-06, `TestRealTimelineSweep`).
 
 ## The activity kinds
@@ -34,14 +34,18 @@ no gaps and no negative durations (verified 2026-08-06, `TestRealTimelineSweep`)
 - **waiting for a background task**: a background task's notification closed the gap.
 - **waiting, reason unknown**: the lane went quiet and later produced something, with no input, message, or
   notification between the two.
+- **API error**: the API didn't answer the request. The span is the harness retrying, which is time the session lost
+  through no fault of the agent.
 - **stalled**: a result that arrived far too late for what the call was doing. The agent was suspended, not working.
 - **compacting**: the harness compacting the context.
 
-`Kind.IsWaiting()` is the four waits, and `Kind.IsGap()` adds `stalled`: everything where the lane produced nothing,
-which is what a swimlane draws as a hole. Ask those rather than listing kinds, so a new one can't be missed.
+`Kind.IsWaiting()` is the four waits, and `Kind.IsGap()` adds `stalled` and `API error`: everything where the lane
+produced nothing, which is what a swimlane draws as a hole. Ask those rather than listing kinds, so a new one can't be
+missed.
 
-`compacting` is a kind the original plan didn't have. Compaction took 132 s in the reference session, and it's neither
-the agent thinking nor a tool running, so folding it into a wait would call two minutes of real work idleness.
+Two kinds the original plan didn't have. `compacting`, because compaction took 132 s in the reference session and it's
+neither the agent thinking nor a tool running, so folding it into a wait would call two minutes of real work idleness.
+And `API error`, for the reason below.
 
 ### Why waiting is four kinds and not one
 
@@ -94,6 +98,30 @@ Three signals, in order of how much they can be trusted:
 
 A stretch read as idle gets a waiting row, and the block that closed it claims none of it: nothing in the transcript
 says when the lane actually woke up.
+
+### A failed request is its own kind, and is bounded rather than trusted
+
+The harness writes a failed request as an ordinary assistant record with a text block, so nothing but its typed fields
+(`docs/transcript-format.md`) tells it from the agent writing that sentence. Read as prose it becomes a `writing` row;
+read as a long silence it trips the 15-minute backstop above and becomes idle time. Either way an outage quietly lands
+in a number that means something else, which is why it gets a kind.
+
+`API error` covers everything the API refused, not only an outage: a rate limit, an expired login, a prompt too long,
+a model that doesn't exist. Naming the kind "outage" would be wrong for half of them, and the row's info carries the
+typed reason and the status, so the specific failure is right there.
+
+The span is the stretch before the record, because the retries aren't written down: no transcript in the corpus holds
+two error records in a row, so the gap before one is the only measure of the outage there is. Two clamps keep that
+honest, and both leave a wait behind rather than swallowing time they can't account for:
+
+- A lane whose turn had already ended had no request in flight, so the stretch before the error stays a wait and the
+  error marks the moment without claiming any of it.
+- The retry window can't run longer than `DefaultMaxAPIErrorSpan`, which is two hours against a corpus whose longest
+  such gap is 1h19m. The case it guards has no evidence and every reason to expect: a session resumed weeks later,
+  whose first request fails on a login that expired while it sat there.
+
+A lane is idle after a failed request, because the agent can't carry on by itself. Whatever comes next was started by
+something else, and an unexplained gap after one says so.
 
 ### Compaction is placed by its own duration, not by the stamps around it
 

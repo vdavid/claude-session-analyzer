@@ -30,7 +30,7 @@ and 3.5 GB in a quarter of a second, because it reads the two ends of each trans
 
 One row per stretch of one agent's wall clock, in six columns: `From`, `Until`, `Agent`, `Activity`, `Extra info`, and
 `Duration (s)`. `Activity` is one of thinking, writing, tool call, tool execution, waiting for a person, waiting for a
-teammate, waiting for a background task, waiting with the reason unknown, stalled, or compacting. Waiting is four
+teammate, waiting for a background task, waiting with the reason unknown, API error, stalled, or compacting. Waiting is four
 values rather than one because "71 hours of waiting" answers nothing, while knowing that 41 of those hours were on a
 person does. Within an agent the rows tile: each starts where the last ended, so nothing is unaccounted for and nothing
 is counted twice. What each activity means, and every judgement call behind it, is in `docs/timeline-rules.md`.
@@ -54,6 +54,9 @@ These are honest, not temporary:
   and in prompt processing lands inside the thinking span. On a large context that's a real share of it.
 - **Stall detection is a heuristic.** A long build isn't a stall, but a six-hour `rm` is, and the line between them is
   drawn by a threshold, not by evidence in the file.
+- **An outage is measured by the silence before it.** Claude Code records that a request failed, never that it retried,
+  so the stretch before the error record is all there is to go on. It's capped at two hours, past which the time is
+  reported as idle instead.
 - **Time per activity adds up to more than the session took.** Agents run at the same time, so a three-day session can
   hold five days of agent time. That's the honest answer, and both numbers are reported separately.
 

@@ -30,7 +30,8 @@ From,Until,Agent,Activity,Extra info,Duration (s)
 2026-08-03T14:31:07.984Z,2026-08-03T14:33:20.000Z,lead,compacting,"compacted 674,475 tokens down to 10,198 (manual)",132.016
 2026-08-03T14:33:20.000Z,2026-08-03T14:33:30.000Z,lead,writing,Carrying on.,10.000
 2026-08-03T14:33:30.000Z,2026-08-03T14:34:00.000Z,lead,waiting for a person,waiting for the next prompt; 1 teammate alive: worker,30.000
-2026-08-03T14:34:00.000Z,2026-08-03T14:35:00.000Z,lead,"waiting, reason unknown",idle to the end of the transcript; 1 teammate alive: worker,60.000
+2026-08-03T14:34:00.000Z,2026-08-03T14:34:30.000Z,lead,API error,rate limit (429): API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited,30.000
+2026-08-03T14:34:30.000Z,2026-08-03T14:35:00.000Z,lead,"waiting, reason unknown",idle to the end of the transcript; 1 teammate alive: worker,30.000
 2026-08-03T18:25:40.000Z,2026-08-03T18:25:50.000Z,worker,writing,"Cleaned up, and I've been gone a while.",10.000
 2026-08-03T18:25:50.000Z,2026-08-03T18:26:00.000Z,worker,tool call,Bash (build): cargo build --release,10.000
 2026-08-03T18:26:00.000Z,2026-08-03T19:06:00.000Z,worker,tool execution,Bash (build): cargo build --release,2400.000
