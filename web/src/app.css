@@ -1,0 +1,187 @@
+@import 'tailwindcss';
+
+/*
+ * Design system: an instrument, not a dashboard.
+ *
+ * The one rule that shapes everything: colour belongs to data. The chrome is ink on cool paper in
+ * light mode and ink on slate in dark, with a single blue reserved for links and focus. Every other
+ * saturated pixel on the page stands for an activity kind, so a colour in the chrome would read as
+ * a kind that isn't in the legend.
+ *
+ * Tokens are declared as plain custom properties on `:root` and re-declared under the dark media
+ * query, then registered into Tailwind's `@theme` by reference. That's what lets a single set of
+ * utility names (`bg-canvas`, `text-ink-muted`) follow the system theme with no class toggling and
+ * no flash on load. Don't use Tailwind's opacity modifiers (`bg-canvas/50`) on these: the
+ * indirection defeats them. Reach for `color-mix()` instead.
+ */
+
+:root {
+    color-scheme: light dark;
+
+    /* Chrome */
+    --csa-canvas: #f5f7fa;
+    --csa-surface: #ffffff;
+    --csa-sunken: #eceff4;
+    --csa-border: #dce1e9;
+    --csa-border-strong: #bcc5d2;
+    --csa-ink: #151a21;
+    --csa-ink-muted: #545d6b;
+    --csa-ink-faint: #737d8c;
+    --csa-accent: #2c5fa8;
+    --csa-accent-soft: #dfe8f6;
+
+    /* Activity kinds. Work is cool, waiting is warm, trouble is red, and compaction is neutral,
+       so "how much of this was waiting" is answerable from across the room. */
+    --csa-kind-thinking: #6b4fc4;
+    --csa-kind-writing: #2f6fc4;
+    --csa-kind-tool-call: #1f8a8c;
+    --csa-kind-tool-execution: #2a8354;
+    --csa-kind-wait-person: #c9611b;
+    --csa-kind-wait-teammate: #b8862a;
+    --csa-kind-wait-background: #8a6b3c;
+    --csa-kind-wait-unknown: #93897c;
+    --csa-kind-api-error: #c33f38;
+    --csa-kind-stalled: #a6357a;
+    --csa-kind-compacting: #5f6b7a;
+
+    /* Roll-ups the summary bar and the swimlane use. */
+    --csa-band-work: #2f6fc4;
+    --csa-band-wait: #c9611b;
+    --csa-band-trouble: #c33f38;
+
+    --csa-shadow-card: 0 1px 2px rgb(21 26 33 / 0.05), 0 1px 1px rgb(21 26 33 / 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --csa-canvas: #0e1218;
+        --csa-surface: #161b23;
+        --csa-sunken: #0a0d12;
+        --csa-border: #242b37;
+        --csa-border-strong: #39424f;
+        --csa-ink: #e6eaf1;
+        --csa-ink-muted: #a3adbb;
+        --csa-ink-faint: #7f8998;
+        --csa-accent: #7aa7e8;
+        --csa-accent-soft: #1b2839;
+
+        --csa-kind-thinking: #a58df0;
+        --csa-kind-writing: #6fa8ec;
+        --csa-kind-tool-call: #4fc0c0;
+        --csa-kind-tool-execution: #5cbd85;
+        --csa-kind-wait-person: #e8843c;
+        --csa-kind-wait-teammate: #e2b452;
+        --csa-kind-wait-background: #b99552;
+        --csa-kind-wait-unknown: #b3aa9d;
+        --csa-kind-api-error: #ef7a70;
+        --csa-kind-stalled: #e070ae;
+        --csa-kind-compacting: #94a1b2;
+
+        --csa-band-work: #6fa8ec;
+        --csa-band-wait: #e8843c;
+        --csa-band-trouble: #ef7a70;
+
+        --csa-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    }
+}
+
+@theme inline {
+    --color-canvas: var(--csa-canvas);
+    --color-surface: var(--csa-surface);
+    --color-sunken: var(--csa-sunken);
+    --color-border-base: var(--csa-border);
+    --color-border-strong: var(--csa-border-strong);
+    --color-ink: var(--csa-ink);
+    --color-ink-muted: var(--csa-ink-muted);
+    --color-ink-faint: var(--csa-ink-faint);
+    --color-accent: var(--csa-accent);
+    --color-accent-soft: var(--csa-accent-soft);
+    --color-band-work: var(--csa-band-work);
+    --color-band-wait: var(--csa-band-wait);
+    --color-band-trouble: var(--csa-band-trouble);
+
+    --font-sans:
+        ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+    --shadow-card: var(--csa-shadow-card);
+}
+
+@layer base {
+    html {
+        background-color: var(--csa-canvas);
+    }
+
+    body {
+        color: var(--csa-ink);
+        background-color: var(--csa-canvas);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+    }
+
+    /* Numbers are the content here, so they line up by default: a column of durations that jitters
+       is a column you can't scan. */
+    :where(td, th, .tnum) {
+        font-variant-numeric: tabular-nums;
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--csa-accent);
+        outline-offset: 2px;
+        border-radius: 2px;
+    }
+
+    ::selection {
+        background: var(--csa-accent-soft);
+    }
+}
+
+@layer components {
+    /* An uppercase micro-label. Used for section eyebrows and column headers, where the label has
+       to be legible without competing with the number under it. */
+    .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        font-weight: 500;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--csa-ink-faint);
+    }
+
+    .card {
+        background-color: var(--csa-surface);
+        border: 1px solid var(--csa-border);
+        border-radius: 0.625rem;
+        box-shadow: var(--csa-shadow-card);
+    }
+
+    /* Sections rise into place once, staggered by `--rise-delay`, so the page assembles rather
+       than blinking. Purely decorative, so it's off entirely under reduced motion. */
+    .rise {
+        animation: csa-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+        animation-delay: var(--rise-delay, 0ms);
+    }
+}
+
+@keyframes csa-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rise {
+        animation: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+    }
+}

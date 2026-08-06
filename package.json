@@ -1,0 +1,25 @@
+{
+    "name": "claude-session-analyzer",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "packageManager": "pnpm@11.18.0",
+    "scripts": {
+        "preinstall": "npx only-allow pnpm",
+        "dev": "concurrently -n api,web -c magenta,cyan --kill-others 'pnpm dev:api' 'pnpm dev:web'",
+        "dev:api": "go run ./cmd/claude-session-analyzer serve",
+        "dev:web": "pnpm -C web dev",
+        "build": "pnpm -C web build",
+        "check": "node scripts/check.js",
+        "check:go": "node scripts/check.js go",
+        "check:web": "node scripts/check.js web",
+        "format": "pnpm -C web format",
+        "test": "pnpm -C web test"
+    },
+    "devDependencies": {
+        "concurrently": "10.0.4"
+    },
+    "engines": {
+        "pnpm": ">=11"
+    }
+}

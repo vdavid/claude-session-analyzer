@@ -1,0 +1,6 @@
+packages:
+    - web
+
+# Don't install a package version until it has been on npm for three days. A version yanked or
+# patched in its first hours is one we never resolved. 4320 minutes is those three days.
+minimumReleaseAge: 4320
