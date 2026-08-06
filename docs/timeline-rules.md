@@ -160,6 +160,36 @@ would put an ordinary two-minute command on the line.
 The thinking text is stripped from 5,469 of 5,471 sampled blocks. Where it survives the row quotes it; everywhere else
 the row borrows from what the agent did next, always starting with "before", so a reader can tell a quote from a guess.
 
+### A tool call is named twice, because the tools that matter are really many tools
+
+A breakdown by raw tool name says almost nothing. Sampled 2026-08-06 over 76,708 calls in the 624 transcripts modified
+since 2026-07-20: `Bash` is 47,711 of them (62%), `Edit` and `Read` take the top three to 92%, and the 1,769 MCP calls
+arrive as one tool per method across 11 servers, so codegraph's 130 calls sit in four separate names, none of which is
+"codegraph". So `Identify` gives every call two names, and rows carry both.
+
+- **Group** is the level a reader asks about. `Bash` splits by the class its command was read as, giving `Bash (git)`
+  and `Bash (checker)`; an MCP server's methods collapse into `codegraph (MCP)`; everything else is its own name. The
+  MCP separator is two underscores, so a server or method carrying single ones (`claude_ai_Gmail`, `get_thread`) comes
+  through whole.
+- **Leaf** is the exact thing that ran. For an MCP call that's the method. For `Bash` it's the program of the segment
+  that named the command, carrying the subcommand wherever the subcommand is the whole story: `git commit` and
+  `git status` are as different as two tools, and so are `cargo build` and `cargo test`. A program invoked by path is
+  named by its file, so a gate reached through the directory it lives in is `check.sh` rather than the path to it.
+
+Both names come out of one read of the command, which is also where its class comes from. A compound command is named
+after the costliest thing in it, so `git add -A && pnpm check` is a checker run and `curl … | jq` is a fetch: a network
+round trip explains a command's time better than reading what it fetched does. Every class a command can be read as has
+to be in that precedence list, or it can never outrank the plain shell command every command starts out as.
+
+Two things a leaf has to see through, both found by reading the reference session's own output:
+
+- **Arranging the shell isn't work.** `cd`, `export`, `source`, and friends get no vote on what a command was, so
+  `cd apps/desktop && python3 tool.py` is a Python run. Before that rule, `cd` named 212 of that session's 7,057 calls.
+  A command that only arranges the shell still gets named after what it did.
+- **`timeout` hides the command behind a duration.** It's stripped along with the duration and any flags, the same way
+  `sudo` and `nohup` are, so `timeout 120 cargo test` is a test run. It had been hiding a 21-minute `cargo nextest` and
+  a `npx playwright` run inside "shell".
+
 ### A wait is attributed by the record that ended it
 
 The record that arrived is the signal: a teammate's message (read from the harness's envelope, which carries the

@@ -12,8 +12,12 @@ contract it consumes is `docs/api.md`; read that before touching anything that r
   machine, so there's nothing to render ahead of time.
 - **Group by `laneId`, never by `agent`.** 977 lanes in one session share the name `workflow-subagent`.
 - **Colour belongs to data.** The chrome is neutral, with one blue for links and focus; every saturated pixel stands for
-  an activity kind. Kind colours live in `src/app.css` and nowhere else. Look a kind up by name, never by array index:
-  the API only sends kinds a session has rows for.
+  an activity kind or a tool family. Both vocabularies live in `src/app.css` and nowhere else, and no chart mixes them:
+  each sits in its own section behind its own legend. Look a kind or a class up by name, never by array index, because
+  the API only sends what a session has.
+- **The tool palette is seven slots in a fixed order, and the order is the safety mechanism.** It decides which pairs
+  touch in the pie, and it's what the `dataviz` skill's validator was run against in both modes. Re-run it before
+  changing a slot, and don't reorder `FAMILY_ORDER` (`src/lib/classes.ts`). Numbers and date: `docs/frontend.md`.
 - **Never present a `byKind` share as a share of elapsed time.** It's lane time, which is larger. `docs/api.md` § The
   two numbers that aren't the same.
 - Tailwind tokens are registered `@theme inline` over custom properties. An opacity modifier on one compiles to a
@@ -28,7 +32,8 @@ contract it consumes is `docs/api.md`; read that before touching anything that r
 - `src/lib/`: `api.ts` (every call to the server, errors as `ApiError` with a `code` to branch on), `types.ts` (the JSON
   shapes), `format.ts` (durations, instants, bytes; `formatBytes` matches `humanBytes` in `internal/cli/format.go`),
   `kinds.ts` (the eleven kinds: legend order, colour variable, family, and the sentence that keeps each honest),
-  `theme.svelte.ts` (the stylesheet read back out for canvas, following `prefers-color-scheme`).
+  `classes.ts` (the engine's 15 tool classes mapped onto the seven drawn families, in the order the palette was
+  validated in), `theme.svelte.ts` (the stylesheet read back out for canvas, following `prefers-color-scheme`).
 - `src/lib/transform/`: the tested layer. API JSON into chart series. Nothing else is unit-tested. Must-knows:
   `web/src/lib/transform/CLAUDE.md`.
 - `src/lib/components/`: `charts/` (one component per chart, all over `charts/Chart.svelte`), plus the sheet, the

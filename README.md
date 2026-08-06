@@ -11,7 +11,7 @@ its wall clock with the lead idle, or that one agent sat suspended for six hours
 Claude Code already wrote to your disk and answers that.
 
 Two surfaces over one engine: a command line that writes a CSV, and a local web app with a time-spent donut, an
-agent-liveness swimlane, and every derived row in a sortable sheet.
+agent-liveness swimlane, a breakdown of the tools the agents used, and every derived row in a sortable sheet.
 
 ## Status
 
@@ -96,6 +96,10 @@ Open a session and it derives the timeline on the spot, then shows:
 - **A swimlane of who was alive when.** A thick bar means the agent was producing something; a thin one means it wasn't,
   coloured by what it was waiting on. A session with a thousand agents collapses its workflows into a row each, opening
   on click.
+- **What the agents reached for.** A donut of every tool call in the session, with the numbers beside it: how often each
+  tool was used, how long it took, and how many agents used it. `Bash` is broken up by what the command was doing and an
+  MCP server's methods are gathered under the server, so "who used codegraph" is one row rather than four names you have
+  to know to look for. Pick a slice and the sheet below filters to those calls.
 - **Every derived row**, sortable and filterable, down to sub-second spans.
 
 ## How it works

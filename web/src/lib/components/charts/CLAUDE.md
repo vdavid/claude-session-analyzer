@@ -20,8 +20,10 @@ instance handling lives in one place.
 ## Module map
 
 - `Chart.svelte`: create, resize (`ResizeObserver`), dispose, event wiring, and outside-in highlight.
-- `KindPie.svelte`: the donut. Waits carry a diagonal hatch and the two ways a session loses time carry dots, so the
-  chart survives being read without hue.
+- `KindPie.svelte`: the donut of lane time. Waits carry a diagonal hatch and the two ways a session loses time carry
+  dots, so the chart survives being read without hue.
+- `ToolPie.svelte`: the donut of tool calls, coloured by family rather than by group. Slices of one family are adjacent
+  and share a colour by design; the 2px surface ring, the legend, and the shared highlight are what tell them apart.
 - `Swimlane.svelte`: two custom series, thin bars for gaps and thick for producing. Rows scroll through a fixed window
   (`MAX_VISIBLE_ROWS`) rather than shrinking, and a click on a workflow's bar opens it.
 - `ConcurrencyTrace.svelte`: the stepped area strip under the session header.

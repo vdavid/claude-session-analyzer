@@ -16,8 +16,11 @@ is `docs/api.md`; changing a field here means changing that doc.
 - **Every response is JSON, including the failures.** The method-less route patterns exist so a `POST` gets a JSON `405`
   rather than the mux's plain text. Errors are `{"error": {"code", "message", "matches"}}`, and `code` is what a caller
   branches on.
-- **A field that doesn't apply is left out, not sent empty**, so `tool`, `class`, `overlapped`, `timedOut`, and
-  `isError` only appear where they mean something.
+- **A field that doesn't apply is left out, not sent empty**, so `tool`, `class`, `toolGroup`, `overlapped`, `timedOut`,
+  and `isError` only appear where they mean something.
+- **`byTool` counts calls, not rows, and its lane counts don't add up on purpose.** Only the row a call ran in is
+  counted (`Row.IsToolRun`), because the `tool call` row beside it is the agent composing the call. A group keeps its
+  own set of lanes rather than summing its tools': one lane calling two of a server's methods is still one lane.
 - Nothing is cached. A transcript grows while the tool runs, so a cache would be another thing to invalidate.
 
 ## Module map

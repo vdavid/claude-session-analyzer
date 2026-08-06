@@ -65,7 +65,7 @@ One session's metadata, for a session page header. `{"session": {…}}`, the sam
 The rows, plus everything a chart needs already summed. Aggregating here rather than in the browser is the whole point:
 a session's 15,944 rows are a Go loop, not a JavaScript one.
 
-- `?rows=false` leaves the rows out and returns the aggregates alone. That's 364 KB instead of 7.7 MB on the 983-lane
+- `?rows=false` leaves the rows out and returns the aggregates alone. That's 373 KB instead of 8.1 MB on the 983-lane
   session, and `totals.rows` still says how many there were.
 
 ```json
@@ -78,7 +78,25 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
         "laneTimeSeconds": 405702.456,
         "rows": 15944,
         "lanes": 28,
-        "byKind": [{ "kind": "thinking", "seconds": 29450.346, "rows": 2300 }]
+        "byKind": [{ "kind": "thinking", "seconds": 29450.346, "rows": 2300 }],
+        "byTool": [
+            {
+                "group": "codegraph (MCP)",
+                "class": "mcp",
+                "calls": 4,
+                "seconds": 3.427,
+                "lanes": 2,
+                "tools": [
+                    {
+                        "tool": "mcp__codegraph__codegraph_explore",
+                        "leaf": "codegraph_explore",
+                        "calls": 2,
+                        "seconds": 1.492,
+                        "lanes": 1
+                    }
+                ]
+            }
+        ]
     },
     "lanes": [
         {
@@ -124,6 +142,7 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
             "info": "Bash (test): go test ./...",
             "tool": "Bash",
             "class": "test",
+            "toolGroup": "Bash (test)",
             "line": 512
         }
     ]
@@ -141,6 +160,30 @@ breakdown of **lane time**, so say so in the legend.
 `end`, which are the lead's alone. On the reference session a subagent outlives the lead by 20 minutes. Both are `null`
 on a session whose records carry no timestamp, which is 99 of the 725 on this machine, and `totals.rows` is `0` there: a
 consumer that draws a timeline has nothing to draw.
+
+### The tool breakdown
+
+`totals.byTool` answers "which tools did this session use, and who used them". One entry per **group**, most calls
+first, each holding the exact tools inside it.
+
+- **A group is a tool at the level a reader asks about.** The raw name is useless as a grouping: `Bash` is 62% of every
+  call in the corpus and an MCP server arrives as one tool per method, so a breakdown by name is three big slices and a
+  smear (sampled 2026-08-06 over 76,708 calls in 624 transcripts). So `Bash` splits by what the command was doing
+  (`Bash (git)`, `Bash (checker)`) and a server's methods collapse into the server (`codegraph (MCP)`). The rule is
+  `timeline.Identify`, and `docs/timeline-rules.md` has it.
+- **`leaf` is the exact thing inside the group**: an MCP method, or the program a `Bash` call ran (`git commit`,
+  `cargo test`, `pnpm check`). `tool` beside it is the raw name the harness used, for grepping a transcript.
+- **`calls` counts calls, not rows.** Every call leaves a `tool call` row for the agent composing it and one more row
+  for the tool running, and only the second is counted. `seconds` is those second rows added up, so it's the tool's own
+  wall clock including anything the tool waited on, and parallel calls each count their own the way lane time does.
+- **`lanes` is how many lanes made one of these calls.** It's counted per level rather than added up: one lane calling
+  two of a server's methods is one lane for the server and one for each method, so a group's count is never the sum of
+  its tools'.
+- `errors` and `timedOut` are left out when they're zero. `class` is the same string a row carries, and every tool in a
+  group shares it.
+- Every row carrying a `tool` also carries `toolGroup`, so a consumer can filter to a slice's rows without re-deriving
+  the grouping rule. The leaf isn't on the row: nothing filters by it, and the breakdown already carries the leaves.
+- A session that never called a tool gets `[]`.
 
 ### Lanes and gaps
 
@@ -175,10 +218,11 @@ consumer that draws a timeline has nothing to draw.
 
 ## What it costs
 
-Measured on the machine this was built against (2026-08-06, 722 sessions, 3.5 GB):
+Measured on the machine this was built against (2026-08-06, 732 sessions, 3.8 GB):
 
-- `/api/sessions`: 273 KB in 140 ms.
-- The 28-lane reference session's timeline: 5.5 MB in 0.7 s, or 40 KB with `?rows=false`.
-- The 983-lane session's timeline: 7.7 MB in 1.6 s, or 364 KB with `?rows=false`.
+- `/api/sessions`: 280 KB in 124 ms.
+- The 28-lane reference session's timeline: 6.5 MB in 1.1 s, or 59 KB with `?rows=false`. `byTool` is 14 KB of that,
+  over 27 groups.
+- The 983-lane session's timeline: 8.1 MB in 1.9 s, or 373 KB with `?rows=false`.
 
 No compression: this is loopback, where a megabyte costs a millisecond and the CPU spent zipping it wouldn't come back.

@@ -19,8 +19,11 @@ two hand over.
 ## Module map
 
 - `DataSheet.svelte`: the virtualized sheet. Sorting and filtering through TanStack Table, windowing through TanStack
-  Virtual, plus three exact-match dropdowns applied before the table sees the rows.
+  Virtual, plus four exact-match dropdowns applied before the table sees the rows. `toolFilter` is `$bindable`, so the
+  tool breakdown above drives it.
 - `KindLegend.svelte`: the pie's legend as a table, with each kind's caveat. Hovering a row lights its slice.
+- `ToolLegend.svelte`: the tool pie's legend, and where the question actually gets answered: calls, share, tool time,
+  and the lane count that says who reached for each tool. A group with several tools in it opens to show them.
 - `BandBar.svelte`: the eleven kinds rolled into working, waiting, lost, and compacting.
 - `StatRail.svelte`: numbers with their caveat under them rather than in a tooltip.
 - `Notice.svelte`: the empty and unreachable states. Never says "error" or "failed".

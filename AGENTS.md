@@ -4,10 +4,11 @@ This file is the doc hub for AI agents working in this repo. People start at `RE
 
 The tool reads Claude Code session transcripts off disk and reconstructs where the time went: per agent, second by
 second, from the first prompt to the last tool result. It answers questions like "of these three days, how much was
-thinking, how much was tools running, and how much was the lead sitting idle waiting on a teammate?".
+thinking, how much was tools running, and how much was the lead sitting idle waiting on a teammate?", and "which tools
+did this session reach for, and which agents used them?".
 
 Two surfaces over one engine: a Go CLI that emits a CSV timeline, and a local web app (Svelte frontend, the same Go
-binary as its backend) with a time-spent pie, an agent-liveness swimlane, and a sortable data sheet.
+binary as its backend) with a time-spent pie, an agent-liveness swimlane, a tool-use pie, and a sortable data sheet.
 
 It's a personal tool, published because it's generic. Only the transcripts are private. Dual licensed MIT and
 Apache-2.0.
@@ -40,7 +41,8 @@ Apache-2.0.
   its ordered records), and `List`, which summarizes every session on disk by reading only the two ends of each
   transcript.
 - `internal/timeline/`: `Lane` records become activity rows. The activity kinds (`Kinds` lists them, four of them
-  waits), tool classification, stall and timeout detection, and waiting attribution. Rules in `docs/timeline-rules.md`.
+  waits), tool classification and naming (`Identify`), stall and timeout detection, and waiting attribution. Rules in
+  `docs/timeline-rules.md`.
 - `internal/cli/`: the `sessions`, `timeline`, and `serve` subcommands. `cli.Run(args, stdout, stderr) int` is the whole
   surface, so it's tested without a process.
 - `internal/api/`: the HTTP handlers and the JSON shapes. Contract in `docs/api.md`.

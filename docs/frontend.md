@@ -12,7 +12,7 @@ size; the header row sorts on any of those. Under the list, a collapsed "What th
 four caveats a reader needs before trusting anything: thinking spans include model latency, lane time isn't elapsed
 time, stall detection is a heuristic, and a thinking row's subject is borrowed from what came next.
 
-**`/session/[id]`** analyses one session on load, in five stacked sections:
+**`/session/[id]`** analyses one session on load, in six stacked sections:
 
 1. **The trace.** A stepped area strip under the header showing how many agents were producing at once across the span,
    with the peak called out. It's the shape of the session in one line: where the parallel waves were, and how much of
@@ -22,7 +22,9 @@ time, stall detection is a heuristic, and a thinking row's subject is borrowed f
 3. **Where lane time went.** A band bar (working / waiting / lost / compacting), then the donut with its legend as a
    table beside it. Hovering a legend row lights its slice.
 4. **Who was alive, and when.** The swimlane, with a chip per workflow above it.
-5. **Every row.** The virtualized sheet.
+5. **What the agents reached for.** The tool donut, a strip of family shares over it, and the legend as a table beside
+   it. Picking a slice or a legend row filters the sheet below to that tool's rows and scrolls to it.
+6. **Every row.** The virtualized sheet.
 
 ## Decisions
 
@@ -53,6 +55,24 @@ who can't lean on hue and a reminder that those slices aren't work.
 Kind colours live in `web/src/app.css` and are read back out by `theme.svelte.ts` for canvas, because ECharts needs
 literals. Light and dark are two blocks in one file, switched by `prefers-color-scheme` with no class toggling, no
 stored preference, and no flash on load.
+
+### There are exactly two colour vocabularies, and each has its own legend
+
+The tool breakdown can't use the kind colours: it's counting calls by what they were, not stretches of time by what an
+agent was doing. So it has a second set, in the same file, and the page never puts the two in one chart. Each sits in
+its own section behind its own legend, and the chrome between them stays neutral, so neither reads as the other.
+
+The engine reports 15 tool classes, which is more than any palette keeps apart, so `classes.ts` maps them onto **seven
+families** and the chart colours by family. That isn't a rollup for its own sake: because the pie draws families in a
+fixed order, each family is one contiguous arc and the chart says "37% of this session's calls were file work" before a
+reader touches the legend. Groups inside a family share its colour and are told apart by the 2px surface ring between
+them, by the table beside the chart, and by the highlight the two share.
+
+The order is the colourblind-safety mechanism rather than a mood: it decides which pairs ever touch. The seven slots
+were validated with the `dataviz` skill's checker in both modes (2026-08-06), worst adjacent pair ΔE 8.7 light and 11.0
+dark under protanopia and deuteranopia, 17.4 and 19.2 under normal vision, every slot over 3:1 on its surface. Re-run it
+before changing a slot, and keep the order. The seventh slot is the neutral everything-else fold, so it sits below the
+chroma floor on purpose.
 
 ### Type is the system font, deliberately
 
@@ -91,10 +111,14 @@ pixel is the move, but it would cost fidelity under zoom and nothing needs it ye
 
 ### The sheet is virtualized, and its filters are split
 
-TanStack Table owns sorting and the text search; three exact-match dropdowns (activity, class, lane) narrow the rows
-before the table sees them, because a dropdown doesn't need a filter row model. The table is rebuilt when its state
+TanStack Table owns sorting and the text search; four exact-match dropdowns (activity, tool, class, lane) narrow the
+rows before the table sees them, because a dropdown doesn't need a filter row model. The table is rebuilt when its state
 changes rather than mutated in place, which costs one pass over the rows and buys a component with no lifecycle
 subtleties in it. The search box is debounced by 180 ms so a keystroke doesn't rebuild 22,000 rows.
+
+The tool dropdown is bound to the page rather than owned by the sheet, so clicking a slice two sections up and picking
+one from the dropdown are the same act. Picking a group shows both of its rows per call, the composing one and the
+running one, because they're what the derivation produced and the sheet's job is to show the rows.
 
 ## Dependency notes
 
