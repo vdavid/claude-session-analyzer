@@ -178,9 +178,12 @@ func TestTimelineWantsASessionID(t *testing.T) {
 func TestAMissingRootSaysWhereTranscriptsLive(t *testing.T) {
 	absent := filepath.Join(t.TempDir(), "absent")
 
+	// `serve` is in here because it has to notice before it binds a socket: a server that starts and then answers 500
+	// to everything makes a person read a log to find out what a message could have told them.
 	for _, args := range [][]string{
 		{"sessions", "--root", absent},
 		{"timeline", alphaID, "--root", absent},
+		{"serve", "--root", absent},
 	} {
 		code, _, stderr := run(t, args...)
 		if code != 1 {

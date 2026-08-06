@@ -144,8 +144,13 @@ func fill(root string, loc Location) (Location, error) {
 	return loc, nil
 }
 
-// laneFilesIn lists the agent transcripts directly inside dir, sorted. It takes only `agent-*.jsonl`, which leaves out
-// a workflow's `journal.jsonl`: that's the workflow's own log of what it started and what came back, not a lane.
+// isLaneFile says a file name is an agent transcript. Taking only `agent-*.jsonl` leaves out a workflow's
+// `journal.jsonl`: that's the workflow's own log of what it started and what came back, not a lane.
+func isLaneFile(name string) bool {
+	return strings.HasPrefix(name, "agent-") && filepath.Ext(name) == ".jsonl"
+}
+
+// laneFilesIn lists the agent transcripts directly inside dir, sorted.
 func laneFilesIn(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	switch {
@@ -157,11 +162,10 @@ func laneFilesIn(dir string) ([]string, error) {
 
 	var paths []string
 	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasPrefix(name, "agent-") || filepath.Ext(name) != ".jsonl" {
+		if entry.IsDir() || !isLaneFile(entry.Name()) {
 			continue
 		}
-		paths = append(paths, filepath.Join(dir, name))
+		paths = append(paths, filepath.Join(dir, entry.Name()))
 	}
 	sort.Strings(paths)
 	return paths, nil

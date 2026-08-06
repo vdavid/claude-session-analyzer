@@ -73,7 +73,6 @@ func List(root string) ([]Summary, error) {
 	}
 
 	type job struct {
-		slug     string
 		path     string
 		summary  Summary
 		leadSize int64
@@ -100,7 +99,6 @@ func List(root string) ([]Summary, error) {
 			}
 			id := strings.TrimSuffix(name, ".jsonl")
 			jobs = append(jobs, job{
-				slug:     slug.Name(),
 				path:     filepath.Join(dir, name),
 				leadSize: info.Size(),
 				summary: Summary{
@@ -393,16 +391,14 @@ func countLanes(sessionDir string) (count int, bytes int64) {
 	return count, bytes
 }
 
-// laneEntriesIn counts the agent transcripts directly inside dir. Taking only `agent-*.jsonl` leaves out a workflow's
-// `journal.jsonl`, which is the workflow's own log rather than a lane.
+// laneEntriesIn counts the agent transcripts directly inside dir and adds up their size.
 func laneEntriesIn(dir string) (count int, bytes int64) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0, 0
 	}
 	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasPrefix(name, "agent-") || filepath.Ext(name) != ".jsonl" {
+		if entry.IsDir() || !isLaneFile(entry.Name()) {
 			continue
 		}
 		count++

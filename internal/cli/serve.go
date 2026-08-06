@@ -65,6 +65,14 @@ func runServe(a *app, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Check the transcripts are there before binding a socket. Otherwise every request answers 500 and the person has
+	// to read a log to find out why.
+	if _, err := os.Stat(cfg.root); err != nil {
+		if problem := missingRoot(cfg.root, err); problem != nil {
+			return problem
+		}
+		return fmt.Errorf("Couldn't read the transcripts in %s: %w", cfg.root, err)
+	}
 
 	handler := api.New(api.Options{Root: cfg.root, FrontendOrigins: cfg.frontendOrigins()})
 	server := &http.Server{

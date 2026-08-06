@@ -13,8 +13,12 @@ import (
 // one a person is after is nearly always a recent one.
 const defaultLimit = 20
 
-// titleWidth clips a title so the column stays a column. Titles run long, and the id is what gets copied anyway.
-const titleWidth = 44
+// titleWidth and projectWidth keep two columns that can run to any length from pushing everything else off the screen.
+// A worktree path is the long one: `~/projects-git/vdavid/cmdr/.claude/worktrees/some-branch-name`.
+const (
+	titleWidth   = 44
+	projectWidth = 40
+)
 
 func runSessions(a *app, args []string) error {
 	fs := newFlagSet(a, "sessions")
@@ -54,7 +58,7 @@ func runSessions(a *app, args []string) error {
 	for _, s := range shown {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			s.ID, localTime(s.Start), length(s), count(s.Subagents), humanBytes(s.Bytes),
-			shortenHome(s.ProjectPath), clip(s.Title, titleWidth))
+			clipStart(shortenHome(s.ProjectPath), projectWidth), clip(s.Title, titleWidth))
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("Couldn't write the listing: %w", err)
