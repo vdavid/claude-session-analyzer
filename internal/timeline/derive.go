@@ -21,6 +21,7 @@ func Derive(s *session.Session, opts Options) *Timeline {
 
 		d := &laneDeriver{lane: lane, opts: opts, cursor: first, end: last, open: map[string]*call{}}
 		rows := d.run()
+		labelThinking(rows)
 
 		tl.Lanes = append(tl.Lanes, LaneSpan{
 			ID:         lane.ID,

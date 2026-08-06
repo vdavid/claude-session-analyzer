@@ -113,8 +113,29 @@ func clip(s string, n int) string {
 	return cut + "..."
 }
 
-// thinkingInfo labels a thinking row.
-func thinkingInfo(b transcript.Block) string { return "" }
+// thinkingInfo labels a thinking row with the model's own reasoning, on the rare transcript that kept it. Almost
+// every thinking block arrives with its text stripped (5,469 of 5,471 sampled blocks), and labelThinking fills those
+// in from what the agent did next.
+func thinkingInfo(b transcript.Block) string { return clip(b.Text, subjectLimit) }
+
+// labelThinking fills in the thinking rows whose block carried no text. The only honest label left is what the agent
+// did next, so it's phrased as inference: "before Bash (checker): pnpm check". A reader can tell the two apart,
+// because a borrowed label always starts with "before".
+func labelThinking(rows []Row) {
+	subject := "nothing followed it in the transcript"
+	for i := len(rows) - 1; i >= 0; i-- {
+		switch rows[i].Kind {
+		case KindToolCall:
+			subject = "before " + rows[i].Info
+		case KindWriting:
+			subject = "before writing: " + rows[i].Info
+		case KindThinking:
+			if rows[i].Info == "" {
+				rows[i].Info = subject
+			}
+		}
+	}
+}
 
 // executionInfo labels a tool execution or a stalled row: what ran, and anything unusual about how it ended.
 func executionInfo(c *call, v verdict, batch int) string {
