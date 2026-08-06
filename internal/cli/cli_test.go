@@ -32,7 +32,7 @@ func TestSessionsListsWhatIsOnDisk(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr: %s", code, stderr)
 	}
-	for _, want := range []string{"Session", "Started", "Lanes", alphaID, "Widgets, counted", "/tmp/alpha"} {
+	for _, want := range []string{"Session", "Started", "Subagents", alphaID, "Widgets, counted", "/tmp/alpha"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("listing should mention %q:\n%s", want, stdout)
 		}
@@ -200,7 +200,7 @@ func TestNoCommandPrintsTheUsage(t *testing.T) {
 	if code != 2 {
 		t.Errorf("exit code = %d, want 2", code)
 	}
-	for _, want := range []string{"timeline", "sessions"} {
+	for _, want := range []string{"timeline", "sessions", "serve"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("the usage should list %q: %q", want, stderr)
 		}

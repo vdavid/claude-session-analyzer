@@ -37,6 +37,11 @@ func commands() []command {
 			usage:   "<session-id>",
 			run:     runTimeline,
 		},
+		{
+			name:    "serve",
+			summary: "Serve the API on 127.0.0.1, for the web app",
+			run:     runServe,
+		},
 	}
 }
 

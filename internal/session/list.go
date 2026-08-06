@@ -35,9 +35,10 @@ type Summary struct {
 	End   time.Time
 	// Modified is the lead transcript's mtime, which is the honest answer for a session with no timestamped records.
 	Modified time.Time
-	// Lanes counts the subagent transcripts, the ones a workflow spawned included. The lead isn't one of them.
-	Lanes int
-	// Bytes is the lead transcript plus every lane's, which is what the session costs on disk.
+	// Subagents counts the subagent transcripts, the ones a workflow spawned included. The lead isn't one of them, so
+	// this is one less than the lane count a timeline reports. A session that spawned none reports zero.
+	Subagents int
+	// Bytes is the lead transcript plus every subagent's, which is what the session costs on disk.
 	Bytes int64
 }
 
@@ -130,8 +131,8 @@ func List(root string) ([]Summary, error) {
 					j.summary.Start = ends.Start
 					j.summary.End = ends.End
 				}
-				lanes, laneBytes := countLanes(strings.TrimSuffix(j.path, ".jsonl"))
-				j.summary.Lanes = lanes
+				subagents, laneBytes := countLanes(strings.TrimSuffix(j.path, ".jsonl"))
+				j.summary.Subagents = subagents
 				j.summary.Bytes += laneBytes
 			}
 		}()
@@ -166,8 +167,8 @@ func Summarize(loc Location) (Summary, error) {
 	s.Modified = info.ModTime()
 	s.Bytes = info.Size()
 
-	lanes, laneBytes := countLanes(strings.TrimSuffix(loc.TranscriptPath, ".jsonl"))
-	s.Lanes = lanes
+	subagents, laneBytes := countLanes(strings.TrimSuffix(loc.TranscriptPath, ".jsonl"))
+	s.Subagents = subagents
 	s.Bytes += laneBytes
 	return s, nil
 }

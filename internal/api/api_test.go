@@ -1,0 +1,317 @@
+package api
+
+import (
+	"encoding/json"
+	"math"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+const (
+	alphaID  = "11111111-1111-1111-1111-111111111111"
+	goldenID = "11111111-2222-3333-4444-555555555555"
+	// goldenRows and goldenLanes are what the derivation's golden CSV holds for the fixture session.
+	goldenRows  = 35
+	goldenLanes = 3
+)
+
+func sessionRoot() string { return filepath.Join("..", "session", "testdata", "projects") }
+func goldenRoot() string  { return filepath.Join("..", "timeline", "testdata", "projects") }
+
+// get runs one request against a handler over the given transcript root.
+func get(t *testing.T, root, target string) *httptest.ResponseRecorder {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	New(Options{Root: root, FrontendOrigins: []string{"http://127.0.0.1:19428"}}).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	return rec
+}
+
+func decode[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
+	t.Helper()
+	var out T
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode the body: %v\n%s", err, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("content type = %q, want JSON", ct)
+	}
+	return out
+}
+
+func TestSessionsAnswersWithTheNewestFirst(t *testing.T) {
+	rec := get(t, sessionRoot(), "/api/sessions")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
+	}
+	got := decode[sessionListBody](t, rec)
+
+	if len(got.Sessions) != 4 {
+		t.Fatalf("returned %d sessions, want the 4 in testdata", len(got.Sessions))
+	}
+	if !strings.HasPrefix(got.Sessions[0].ID, "33333333-bbbb") {
+		t.Errorf("first session = %s, want the newest one", got.Sessions[0].ID)
+	}
+	if got.Totals.Sessions != 4 || got.Totals.Subagents != 4 {
+		t.Errorf("totals = %+v, want 4 sessions and the 4 subagents alpha spawned", got.Totals)
+	}
+
+	var alpha sessionBody
+	for _, s := range got.Sessions {
+		if s.ID == alphaID {
+			alpha = s
+		}
+	}
+	if alpha.Title != "Widgets, counted" {
+		t.Errorf("title = %q", alpha.Title)
+	}
+	if alpha.ProjectPath != "/tmp/alpha" || alpha.ProjectName != "alpha" {
+		t.Errorf("project = %q / %q, want the path and its last element", alpha.ProjectPath, alpha.ProjectName)
+	}
+	if alpha.Subagents != 4 {
+		t.Errorf("subagents = %d, want 4", alpha.Subagents)
+	}
+	if alpha.Seconds != 5 {
+		t.Errorf("seconds = %v, want 5", alpha.Seconds)
+	}
+	if alpha.Start == nil || alpha.End == nil {
+		t.Errorf("start and end should be there: %+v", alpha)
+	}
+}
+
+func TestSessionsHonoursALimitAndStillTotalsEverything(t *testing.T) {
+	rec := get(t, sessionRoot(), "/api/sessions?limit=2")
+
+	got := decode[sessionListBody](t, rec)
+	if len(got.Sessions) != 2 {
+		t.Errorf("returned %d sessions, want 2", len(got.Sessions))
+	}
+	if got.Totals.Sessions != 4 {
+		t.Errorf("totals say %d sessions, want all 4: a limit caps the page, not the count", got.Totals.Sessions)
+	}
+}
+
+func TestSessionsRejectsALimitThatIsntANumber(t *testing.T) {
+	rec := get(t, sessionRoot(), "/api/sessions?limit=lots")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if code := decode[errorBody](t, rec).Error.Code; code != "bad_request" {
+		t.Errorf("code = %q", code)
+	}
+}
+
+func TestOneSessionResolvesFromAPrefix(t *testing.T) {
+	rec := get(t, sessionRoot(), "/api/sessions/1111")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
+	}
+	got := decode[struct {
+		Session sessionBody `json:"session"`
+	}](t, rec)
+	if got.Session.ID != alphaID {
+		t.Errorf("id = %q, want the full id a prefix resolved to", got.Session.ID)
+	}
+}
+
+func TestAnUnknownSessionIs404WithSomethingToDoNext(t *testing.T) {
+	rec := get(t, sessionRoot(), "/api/sessions/no-such-session")
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	got := decode[errorBody](t, rec)
+	if got.Error.Code != "not_found" {
+		t.Errorf("code = %q", got.Error.Code)
+	}
+	if !strings.Contains(got.Error.Message, "no-such-session") {
+		t.Errorf("message %q should repeat the id", got.Error.Message)
+	}
+}
+
+func TestAnAmbiguousIDIs400AndNamesTheCandidates(t *testing.T) {
+	rec := get(t, sessionRoot(), "/api/sessions/33333333/timeline")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	got := decode[errorBody](t, rec)
+	if got.Error.Code != "ambiguous_id" {
+		t.Errorf("code = %q", got.Error.Code)
+	}
+	if len(got.Error.Matches) != 2 {
+		t.Errorf("matches = %v, want both candidates so the caller can pick", got.Error.Matches)
+	}
+}
+
+func TestTimelineReturnsRowsAndTheAggregatesAFrontendWouldOtherwiseSum(t *testing.T) {
+	rec := get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
+	}
+	got := decode[timelineBody](t, rec)
+
+	if got.Session.ID != goldenID {
+		t.Errorf("session id = %q", got.Session.ID)
+	}
+	if len(got.Rows) != goldenRows {
+		t.Errorf("rows = %d, want %d, the golden CSV's", len(got.Rows), goldenRows)
+	}
+	if len(got.Lanes) != goldenLanes {
+		t.Errorf("lanes = %d, want %d", len(got.Lanes), goldenLanes)
+	}
+	if got.Totals.Rows != goldenRows || got.Totals.Lanes != goldenLanes {
+		t.Errorf("totals = %+v, want them to agree with the arrays", got.Totals)
+	}
+
+	// The two numbers a reader could confuse. Lanes run in parallel, so summed lane time is the larger one, and the
+	// names have to keep them apart.
+	if got.Totals.WallClockSeconds <= 0 || got.Totals.LaneTimeSeconds <= 0 {
+		t.Fatalf("totals = %+v, want both spans", got.Totals)
+	}
+	if got.Totals.LaneTimeSeconds <= got.Totals.WallClockSeconds {
+		t.Errorf("lane time %v should exceed wall clock %v in a session with concurrent lanes",
+			got.Totals.LaneTimeSeconds, got.Totals.WallClockSeconds)
+	}
+
+	// The pie has to add up to the rows it's made of.
+	var byKind, rows float64
+	for _, k := range got.Totals.ByKind {
+		byKind += k.Seconds
+	}
+	for _, r := range got.Rows {
+		rows += r.Seconds
+	}
+	if math.Abs(byKind-rows) > 0.01 {
+		t.Errorf("per-kind totals add up to %v, the rows to %v", byKind, rows)
+	}
+	if math.Abs(byKind-got.Totals.LaneTimeSeconds) > 0.01 {
+		t.Errorf("per-kind totals add up to %v, lane time says %v", byKind, got.Totals.LaneTimeSeconds)
+	}
+
+	for _, lane := range got.Lanes {
+		var laneKinds float64
+		for _, k := range lane.ByKind {
+			laneKinds += k.Seconds
+		}
+		var laneRows float64
+		var counted int
+		for _, r := range got.Rows {
+			if r.LaneID == lane.ID {
+				laneRows += r.Seconds
+				counted++
+			}
+		}
+		if math.Abs(laneKinds-laneRows) > 0.01 {
+			t.Errorf("lane %s: per-kind totals add up to %v, its rows to %v", lane.Name, laneKinds, laneRows)
+		}
+		if lane.Rows != counted {
+			t.Errorf("lane %s: says %d rows, %d carry its id", lane.Name, lane.Rows, counted)
+		}
+		if lane.From.IsZero() || lane.Until.IsZero() {
+			t.Errorf("lane %s: a swimlane needs both ends: %+v", lane.Name, lane)
+		}
+	}
+}
+
+// TestTimelineGapsAreTheStretchesALaneProducedNothing keeps the swimlane's holes honest: every gap has to be a row of
+// the same lane that the derivation called idle.
+func TestTimelineGapsAreTheStretchesALaneProducedNothing(t *testing.T) {
+	got := decode[timelineBody](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
+
+	gaps := 0
+	for _, lane := range got.Lanes {
+		for _, gap := range lane.Gaps {
+			gaps++
+			if gap.Kind != "waiting" && gap.Kind != "stalled" {
+				t.Errorf("lane %s: gap of kind %q, want the kinds where the lane produced nothing", lane.Name, gap.Kind)
+			}
+			found := false
+			for _, r := range got.Rows {
+				if r.LaneID == lane.ID && r.From.Equal(gap.From) && r.Until.Equal(gap.Until) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("lane %s: gap %s → %s isn't one of its rows", lane.Name, gap.From, gap.Until)
+			}
+		}
+	}
+	if gaps == 0 {
+		t.Error("the fixture has waits and stalls in it, so the lanes should carry gaps")
+	}
+}
+
+// TestTimelineCanLeaveTheRowsOut is what a session with 983 lanes needs: the pie and the swimlane without the sheet.
+func TestTimelineCanLeaveTheRowsOut(t *testing.T) {
+	full := decode[timelineBody](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
+	light := decode[timelineBody](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline?rows=false"))
+
+	if len(light.Rows) != 0 {
+		t.Errorf("returned %d rows, want none", len(light.Rows))
+	}
+	if light.Totals.Rows != full.Totals.Rows {
+		t.Errorf("totals say %d rows, want the %d it counted", light.Totals.Rows, full.Totals.Rows)
+	}
+	if len(light.Lanes) != len(full.Lanes) {
+		t.Errorf("lanes = %d, want the same %d", len(light.Lanes), len(full.Lanes))
+	}
+	if light.Totals.LaneTimeSeconds != full.Totals.LaneTimeSeconds {
+		t.Errorf("lane time = %v, want the same %v", light.Totals.LaneTimeSeconds, full.Totals.LaneTimeSeconds)
+	}
+}
+
+func TestAnUnknownPathIs404WithAJSONBody(t *testing.T) {
+	rec := get(t, sessionRoot(), "/api/nothing-here")
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	if code := decode[errorBody](t, rec).Error.Code; code != "not_found" {
+		t.Errorf("code = %q", code)
+	}
+}
+
+func TestTheWrongMethodIs405WithAJSONBody(t *testing.T) {
+	rec := httptest.NewRecorder()
+	New(Options{Root: sessionRoot()}).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/sessions", nil))
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+	if code := decode[errorBody](t, rec).Error.Code; code != "method_not_allowed" {
+		t.Errorf("code = %q", code)
+	}
+	if allow := rec.Header().Get("Allow"); allow != "GET" {
+		t.Errorf("Allow = %q, want GET", allow)
+	}
+}
+
+// TestOnlyTheFrontendOriginCanReadTheAnswer keeps the browser from handing a session's contents to a page that isn't
+// this tool's own frontend. The port comes from `.env`, and nothing else is on the list.
+func TestOnlyTheFrontendOriginCanReadTheAnswer(t *testing.T) {
+	handler := New(Options{Root: sessionRoot(), FrontendOrigins: []string{"http://127.0.0.1:19428"}})
+
+	for _, c := range []struct{ origin, want string }{
+		{"http://127.0.0.1:19428", "http://127.0.0.1:19428"},
+		{"http://evil.example", ""},
+		{"http://127.0.0.1:3000", ""},
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/sessions", nil)
+		req.Header.Set("Origin", c.origin)
+		handler.ServeHTTP(rec, req)
+
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != c.want {
+			t.Errorf("origin %s got Access-Control-Allow-Origin %q, want %q", c.origin, got, c.want)
+		}
+	}
+}

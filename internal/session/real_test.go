@@ -132,10 +132,10 @@ func TestRealListing(t *testing.T) {
 	elapsed := time.Since(start)
 
 	var bytes int64
-	var lanes, untitled, untimed int
+	var subagents, untitled, untimed int
 	for _, s := range sums {
 		bytes += s.Bytes
-		lanes += s.Lanes
+		subagents += s.Subagents
 		if s.Title == "" {
 			untitled++
 		}
@@ -143,7 +143,7 @@ func TestRealListing(t *testing.T) {
 			untimed++
 		}
 	}
-	t.Logf("%d sessions, %d lanes, %.2f GB in %s", len(sums), lanes, float64(bytes)/(1<<30),
+	t.Logf("%d sessions, %d subagents, %.2f GB in %s", len(sums), subagents, float64(bytes)/(1<<30),
 		elapsed.Round(time.Millisecond))
 	t.Logf("%d sessions carry no title, %d carry no timestamped record", untitled, untimed)
 
@@ -169,8 +169,8 @@ func TestRealListing(t *testing.T) {
 		if full.ProjectPath != sum.ProjectPath {
 			t.Errorf("%s: listing says project %q, a full parse says %q", sum.ID, sum.ProjectPath, full.ProjectPath)
 		}
-		if got := len(full.Lanes) - 1; got != sum.Lanes {
-			t.Errorf("%s: listing counted %d lanes, a full parse found %d", sum.ID, sum.Lanes, got)
+		if got := len(full.Lanes) - 1; got != sum.Subagents {
+			t.Errorf("%s: listing counted %d subagents, a full parse found %d", sum.ID, sum.Subagents, got)
 		}
 
 		var first, last time.Time
@@ -193,8 +193,8 @@ func TestRealListing(t *testing.T) {
 	t.Logf("%d sessions cross-checked against a full parse", checked)
 
 	for _, s := range sums[:min(10, len(sums))] {
-		t.Logf("  %s  %-24s %5d lanes  %8.1f MB  %s", s.Start.Format(time.RFC3339), truncateForLog(s.Title, 24),
-			s.Lanes, float64(s.Bytes)/(1<<20), s.ProjectSlug)
+		t.Logf("  %s  %-24s %5d subagents  %8.1f MB  %s", s.Start.Format(time.RFC3339), truncateForLog(s.Title, 24),
+			s.Subagents, float64(s.Bytes)/(1<<20), s.ProjectSlug)
 	}
 }
 

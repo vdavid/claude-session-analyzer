@@ -58,8 +58,8 @@ func TestListReportsEverySessionUnderTheRoot(t *testing.T) {
 		t.Errorf("duration = %s, want 5s", alpha.Duration())
 	}
 	// Three direct subagents plus the one a workflow spawned. The workflow's own journal isn't a lane.
-	if alpha.Lanes != 4 {
-		t.Errorf("lanes = %d, want 4", alpha.Lanes)
+	if alpha.Subagents != 4 {
+		t.Errorf("subagents = %d, want 4", alpha.Subagents)
 	}
 	if alpha.Bytes <= 0 {
 		t.Errorf("bytes = %d, want the lead transcript plus its lanes", alpha.Bytes)
@@ -89,8 +89,8 @@ func TestListLeavesOutSessionsWithNoSubagents(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	for _, s := range got {
-		if s.ID == soloID && s.Lanes != 0 {
-			t.Errorf("lanes = %d for a session that spawned none", s.Lanes)
+		if s.ID == soloID && s.Subagents != 0 {
+			t.Errorf("subagents = %d for a session that spawned none", s.Subagents)
 		}
 	}
 }

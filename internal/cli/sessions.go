@@ -50,29 +50,29 @@ func runSessions(a *app, args []string) error {
 	}
 
 	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "Session\tStarted\tLength\tLanes\tSize\tProject\tTitle")
+	fmt.Fprintln(tw, "Session\tStarted\tLength\tSubagents\tSize\tProject\tTitle")
 	for _, s := range shown {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			s.ID, localTime(s.Start), length(s), count(s.Lanes), humanBytes(s.Bytes),
+			s.ID, localTime(s.Start), length(s), count(s.Subagents), humanBytes(s.Bytes),
 			shortenHome(s.ProjectPath), clip(s.Title, titleWidth))
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("Couldn't write the listing: %w", err)
 	}
 
-	var lanes int
+	var subagents int
 	var bytes int64
 	for _, s := range sums {
-		lanes += s.Lanes
+		subagents += s.Subagents
 		bytes += s.Bytes
 	}
 	if len(shown) < len(sums) {
-		fmt.Fprintf(a.out, "\nShowing %s of %s sessions (%s lanes, %s on disk). Use `--limit 0` for all of them.\n",
-			count(len(shown)), count(len(sums)), count(lanes), humanBytes(bytes))
+		fmt.Fprintf(a.out, "\nShowing %s of %s sessions (%s subagents, %s on disk). Use `--limit 0` for all of them.\n",
+			count(len(shown)), count(len(sums)), count(subagents), humanBytes(bytes))
 		return nil
 	}
-	fmt.Fprintf(a.out, "\n%s sessions, %s lanes, %s on disk. Times are local.\n",
-		count(len(sums)), count(lanes), humanBytes(bytes))
+	fmt.Fprintf(a.out, "\n%s sessions, %s subagents, %s on disk. Times are local.\n",
+		count(len(sums)), count(subagents), humanBytes(bytes))
 	return nil
 }
 
