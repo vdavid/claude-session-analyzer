@@ -1,0 +1,4 @@
+{"type":"assistant","uuid":"ok1","timestamp":"2026-08-03T08:44:05.000Z","message":{"model":"claude-opus-5","role":"assistant","content":[{"type":"text","text":"Fine."}]}}
+{"type":"assistant","uuid":"broken","message":{"content":[{"type":"tex
+
+{"type":"assistant","uuid":"ok2","timestamp":"2026-08-03T08:44:06.000Z","message":{"model":"claude-opus-5","role":"assistant","content":[{"type":"text","text":"Also fine."}]}}
