@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatCount, formatDuration, formatShare } from '../src/lib/format'
+import { formatBytes, formatCount, formatDuration, formatInstant, formatShare, instantMs } from '../src/lib/format'
 
 describe('formatDuration', () => {
     it('keeps a sub-second row visible instead of rounding it to nothing', () => {
@@ -44,5 +44,22 @@ describe('formatCount and formatBytes', () => {
         expect(formatBytes(2768)).toBe('2.8 KB')
         expect(formatBytes(66984138)).toBe('67.0 MB')
         expect(formatBytes(3781937698)).toBe('3.8 GB')
+    })
+})
+
+describe('parseInstant', () => {
+    it('refuses a zero date, which is a valid string and a lie', () => {
+        expect(instantMs('0001-01-01T00:00:00Z')).toBeNull()
+        expect(instantMs('1970-01-01T00:00:00Z')).toBeNull()
+    })
+
+    it('takes a real one, trailing zeros trimmed or not', () => {
+        expect(instantMs('2026-08-03T08:44:16.7Z')).toBe(Date.parse('2026-08-03T08:44:16.700Z'))
+    })
+
+    it('says nothing rather than guessing', () => {
+        expect(instantMs(null)).toBeNull()
+        expect(instantMs('not a date')).toBeNull()
+        expect(formatInstant(null)).toBe('unknown')
     })
 })

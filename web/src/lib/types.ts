@@ -81,6 +81,7 @@ export interface TimelineRow {
 }
 
 export interface TimelineTotals {
+    /** Null on a session whose records carry no timestamp, same as the session's own `start`. */
     from: string | null
     until: string | null
     /** How long the session took. */

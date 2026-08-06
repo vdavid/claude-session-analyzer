@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -354,5 +355,33 @@ func TestOnlyTheFrontendOriginCanReadTheAnswer(t *testing.T) {
 		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != c.want {
 			t.Errorf("origin %s got Access-Control-Allow-Origin %q, want %q", c.origin, got, c.want)
 		}
+	}
+}
+
+// TestATimelineWithNoTimestampsAnswersNullRatherThanYearOne holds the contract in `docs/api.md`: an instant that isn't
+// known is null, never a zero date. 99 of the 725 sessions on the machine this was built against carry no timestamped
+// record at all, and a frontend that formats a zero date shows a reader "1-01-01 00:53".
+func TestATimelineWithNoTimestampsAnswersNullRatherThanYearOne(t *testing.T) {
+	const id = "44444444-4444-4444-4444-444444444444"
+	root := t.TempDir()
+	dir := filepath.Join(root, "-tmp-gamma")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	record := `{"type":"user","uuid":"g1","sessionId":"` + id + `","cwd":"/tmp/gamma","message":{"role":"user","content":"No clock on any of this."}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, id+".jsonl"), []byte(record), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := decode[timelineBody](t, get(t, root, "/api/sessions/"+id+"/timeline"))
+
+	if got.Totals.From != nil {
+		t.Errorf("totals.from = %v, want null on a session with no timestamped record", got.Totals.From)
+	}
+	if got.Totals.Until != nil {
+		t.Errorf("totals.until = %v, want null on a session with no timestamped record", got.Totals.Until)
+	}
+	if got.Totals.WallClockSeconds != 0 {
+		t.Errorf("wallClockSeconds = %v, want 0", got.Totals.WallClockSeconds)
 	}
 }

@@ -95,10 +95,17 @@ export function formatTimeOfDay(ms: number): string {
     return TIME_ONLY.format(new Date(ms))
 }
 
+/**
+ * The floor exists because a zero date is a valid RFC 3339 string. The API nulls its own, but anything upstream that
+ * grows a new one shouldn't be able to put "1-01-01" in front of a reader: no Claude Code transcript predates 2024.
+ */
+const EARLIEST_PLAUSIBLE = Date.UTC(2024, 0, 1)
+
 export function parseInstant(iso: string | null | undefined): Date | null {
     if (!iso) return null
     const d = new Date(iso)
-    return Number.isNaN(d.getTime()) ? null : d
+    const ms = d.getTime()
+    return Number.isNaN(ms) || ms < EARLIEST_PLAUSIBLE ? null : d
 }
 
 /** Milliseconds since the epoch, or null when the instant is missing or unparseable. */

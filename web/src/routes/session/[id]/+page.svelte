@@ -106,6 +106,8 @@
     })
 
     const hiddenLanes = $derived(swimlaneRows.reduce((sum, row) => sum + row.hiddenLanes, 0))
+    /** A session whose records carry no timestamp derives no rows, so there's nothing to place on a clock. */
+    const derivable = $derived(Boolean(totals?.rows))
     const kinds = $derived(slices.map((s) => s.kind))
     let highlight = $state<number | null>(null)
 
@@ -131,7 +133,9 @@
                   {
                       label: 'Lanes',
                       value: formatCount(totals.lanes),
-                      note: `The lead and ${formatCount(totals.lanes - 1)} subagents`,
+                      note: totals.lanes
+                          ? `The lead and ${formatCount(totals.lanes - 1)} subagents`
+                          : 'Nothing here carries a timestamp',
                   },
                   {
                       label: 'Rows',
@@ -167,8 +171,10 @@
         <p class="mt-2.5 text-sm text-ink-faint">
             {#if session.projectPath}<code class="text-ink-muted">{session.projectPath}</code>{/if}
             {#if session.projectPath}<span class="px-1.5">·</span>{/if}
-            {formatInstant(totals.from)} to {formatInstant(totals.until)}
-            <span class="px-1.5">·</span>
+            {#if totals.from && totals.until}
+                {formatInstant(totals.from)} to {formatInstant(totals.until)}
+                <span class="px-1.5">·</span>
+            {/if}
             {formatBytes(session.bytes)} of transcript
         </p>
     </header>
@@ -195,111 +201,125 @@
         <StatRail {stats} />
     </section>
 
-    <section class="rise mt-8" style:--rise-delay="140ms" aria-labelledby="split-heading">
-        <h2 id="split-heading" class="text-xl font-semibold tracking-tight text-ink">Where lane time went</h2>
-        <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
-            A breakdown of <strong class="font-medium text-ink">lane time</strong>, {formatDuration(
-                totals.laneTimeSeconds,
-            )}, not of the {formatDuration(totals.wallClockSeconds)} the session took. Lanes running side by side each count
-            their own time, which is why the two differ.
-        </p>
-
-        <div class="card mt-4 p-5">
-            <BandBar {bands} />
-
-            <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-8">
-                <div class="lg:sticky lg:top-20 lg:self-start">
-                    <KindPie {slices} {highlight} height="300px" />
-                </div>
-                <KindLegend {slices} total={bands.total} onHover={(index) => (highlight = index)} />
-            </div>
-        </div>
-    </section>
-
-    <section class="rise mt-10" style:--rise-delay="180ms" aria-labelledby="lanes-heading">
-        <h2 id="lanes-heading" class="text-xl font-semibold tracking-tight text-ink">Who was alive, and when</h2>
-        <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
-            A thick bar is a stretch the lane produced something. A thin one is a stretch it didn't, coloured by what it
-            was waiting on. Drag to pan, ctrl and scroll to zoom, or use the slider underneath.
-        </p>
-
-        {#if workflows.length}
-            <div class="mt-4 flex flex-wrap items-center gap-2">
-                <span class="eyebrow">
-                    {formatCount(workflows.length)}
-                    {workflows.length === 1 ? 'workflow' : 'workflows'}, one row each
-                </span>
-                {#each workflows as [id, count] (id)}
-                    <button
-                        type="button"
-                        onclick={() => toggleWorkflow(id)}
-                        aria-pressed={expanded.has(id)}
-                        class="rounded-full border px-2.5 py-1 font-mono text-xs transition-colors"
-                        class:border-accent={expanded.has(id)}
-                        class:text-accent={expanded.has(id)}
-                        class:bg-accent-soft={expanded.has(id)}
-                        class:border-border-base={!expanded.has(id)}
-                        class:text-ink-muted={!expanded.has(id)}
-                    >
-                        {expanded.has(id) ? '▾' : '▸'}
-                        {id}
-                        <span class="text-ink-faint">· {formatCount(count)}</span>
-                    </button>
-                {/each}
-            </div>
-            <p class="mt-2 text-xs text-ink-faint">
-                A workflow's row is the union of its lanes, so it's filled wherever at least one of them was producing.
-                Open one to see its lanes; the chart draws the first 150 of them.
+    {#if !derivable}
+        <section class="rise mt-8 max-w-2xl" style:--rise-delay="140ms">
+            <Notice
+                headline="There's no timeline to draw here"
+                detail="Not one record in this transcript carries a timestamp, so there's nothing to place on a clock. That's true of 99 of the 725 sessions on this machine, most of them a few lines long."
+            />
+        </section>
+    {:else}
+        <section class="rise mt-8" style:--rise-delay="140ms" aria-labelledby="split-heading">
+            <h2 id="split-heading" class="text-xl font-semibold tracking-tight text-ink">Where lane time went</h2>
+            <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
+                A breakdown of <strong class="font-medium text-ink">lane time</strong>, {formatDuration(
+                    totals.laneTimeSeconds,
+                )}, not of the {formatDuration(totals.wallClockSeconds)} the session took. Lanes running side by side each
+                count their own time, which is why the two differ.
             </p>
-        {/if}
 
-        {#if span && swimlaneRows.length}
-            <div class="card mt-4 py-3">
-                <Swimlane rows={swimlaneRows} from={span.from} until={span.until} onToggleWorkflow={toggleWorkflow} />
-            </div>
-            <p class="mt-2 text-xs text-ink-faint">
-                {formatCount(swimlaneRows.length)}
-                {swimlaneRows.length === 1 ? 'row' : 'rows'} drawn, standing for {formatCount(totals.lanes)}
-                {totals.lanes === 1 ? 'lane' : 'lanes'}.
-                {#if hiddenLanes}
-                    {formatCount(hiddenLanes)} lanes of the workflows you opened aren't drawn.
-                {/if}
-            </p>
-        {:else}
-            <div class="mt-4 max-w-2xl">
-                <Notice
-                    headline="No lane here carries a readable span"
-                    detail="Every record in this session is missing its timestamp, which happens on 99 of the sessions on this machine."
-                />
-            </div>
-        {/if}
-    </section>
+            <div class="card mt-4 p-5">
+                <BandBar {bands} />
 
-    <section class="rise mt-10" style:--rise-delay="220ms" aria-labelledby="sheet-heading">
-        <h2 id="sheet-heading" class="text-xl font-semibold tracking-tight text-ink">Every row</h2>
-        <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
-            One row per stretch of one lane's clock, tiling that lane end to end. The lead's row is the same shape as a
-            subagent's, so sorting by length across the whole session tells you what actually took the time.
-        </p>
-
-        <div class="mt-4">
-            {#if full?.rows}
-                <DataSheet rows={full.rows} {lanes} {kinds} />
-            {:else if rowsFailure}
-                {@const described = describeApiError(rowsFailure)}
-                <div class="max-w-2xl">
-                    <Notice headline={described.headline} detail={described.detail} tone="trouble" />
+                <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-8">
+                    <div class="lg:sticky lg:top-20 lg:self-start">
+                        <KindPie {slices} {highlight} height="300px" />
+                    </div>
+                    <KindLegend {slices} total={bands.total} onHover={(index) => (highlight = index)} />
                 </div>
-            {:else if rowsLoading}
-                <p class="text-sm text-ink-faint">
-                    Fetching {formatCount(totals.rows)} rows. The charts above already have everything they need.
+            </div>
+        </section>
+
+        <section class="rise mt-10" style:--rise-delay="180ms" aria-labelledby="lanes-heading">
+            <h2 id="lanes-heading" class="text-xl font-semibold tracking-tight text-ink">Who was alive, and when</h2>
+            <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
+                A thick bar is a stretch the lane produced something. A thin one is a stretch it didn't, coloured by
+                what it was waiting on. Drag to pan, ctrl and scroll to zoom, or use the slider underneath.
+            </p>
+
+            {#if workflows.length}
+                <div class="mt-4 flex flex-wrap items-center gap-2">
+                    <span class="eyebrow">
+                        {formatCount(workflows.length)}
+                        {workflows.length === 1 ? 'workflow' : 'workflows'}, one row each
+                    </span>
+                    {#each workflows as [id, count] (id)}
+                        <button
+                            type="button"
+                            onclick={() => toggleWorkflow(id)}
+                            aria-pressed={expanded.has(id)}
+                            class="rounded-full border px-2.5 py-1 font-mono text-xs transition-colors"
+                            class:border-accent={expanded.has(id)}
+                            class:text-accent={expanded.has(id)}
+                            class:bg-accent-soft={expanded.has(id)}
+                            class:border-border-base={!expanded.has(id)}
+                            class:text-ink-muted={!expanded.has(id)}
+                        >
+                            {expanded.has(id) ? '▾' : '▸'}
+                            {id}
+                            <span class="text-ink-faint">· {formatCount(count)}</span>
+                        </button>
+                    {/each}
+                </div>
+                <p class="mt-2 text-xs text-ink-faint">
+                    A workflow's row is the union of its lanes, so it's filled wherever at least one of them was
+                    producing. Open one to see its lanes; the chart draws the first 150 of them.
                 </p>
             {/if}
-        </div>
-    </section>
 
-    <p class="mt-12 max-w-3xl text-xs leading-relaxed text-ink-faint">
-        Waiting is {formatShare(bands.wait.seconds, bands.total)} of this session's lane time. A `thinking` span holds model
-        latency as well as reasoning, and `stalled` is a heuristic that each row shows its own working for.
-    </p>
+            {#if span && swimlaneRows.length}
+                <div class="card mt-4 py-3">
+                    <Swimlane
+                        rows={swimlaneRows}
+                        from={span.from}
+                        until={span.until}
+                        onToggleWorkflow={toggleWorkflow}
+                    />
+                </div>
+                <p class="mt-2 text-xs text-ink-faint">
+                    {formatCount(swimlaneRows.length)}
+                    {swimlaneRows.length === 1 ? 'row' : 'rows'} drawn, standing for {formatCount(totals.lanes)}
+                    {totals.lanes === 1 ? 'lane' : 'lanes'}.
+                    {#if hiddenLanes}
+                        {formatCount(hiddenLanes)} lanes of the workflows you opened aren't drawn.
+                    {/if}
+                </p>
+            {:else}
+                <div class="mt-4 max-w-2xl">
+                    <Notice
+                        headline="No lane here carries a readable span"
+                        detail="Every record in this session is missing its timestamp, which happens on 99 of the sessions on this machine."
+                    />
+                </div>
+            {/if}
+        </section>
+
+        <section class="rise mt-10" style:--rise-delay="220ms" aria-labelledby="sheet-heading">
+            <h2 id="sheet-heading" class="text-xl font-semibold tracking-tight text-ink">Every row</h2>
+            <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
+                One row per stretch of one lane's clock, tiling that lane end to end. The lead's row is the same shape
+                as a subagent's, so sorting by length across the whole session tells you what actually took the time.
+            </p>
+
+            <div class="mt-4">
+                {#if full?.rows}
+                    <DataSheet rows={full.rows} {lanes} {kinds} />
+                {:else if rowsFailure}
+                    {@const described = describeApiError(rowsFailure)}
+                    <div class="max-w-2xl">
+                        <Notice headline={described.headline} detail={described.detail} tone="trouble" />
+                    </div>
+                {:else if rowsLoading}
+                    <p class="text-sm text-ink-faint">
+                        Fetching {formatCount(totals.rows)} rows. The charts above already have everything they need.
+                    </p>
+                {/if}
+            </div>
+        </section>
+
+        <p class="mt-12 max-w-3xl text-xs leading-relaxed text-ink-faint">
+            Waiting is {formatShare(bands.wait.seconds, bands.total)} of this session's lane time. Thinking spans hold model
+            latency as well as reasoning, and a stall is a heuristic each row shows its own working for.
+        </p>
+    {/if}
 {/if}

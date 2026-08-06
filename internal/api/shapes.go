@@ -69,9 +69,10 @@ type timelineBody struct {
 // totalsBody is the aggregation the browser would otherwise do over 15,000 rows.
 type totalsBody struct {
 	// From and Until bracket every lane, the subagents included, so they can run slightly wider than the session's own
-	// start and end.
-	From  time.Time `json:"from"`
-	Until time.Time `json:"until"`
+	// start and end. Both are null on a session whose records carry no timestamp, same as a session's own Start and
+	// End: a zero date renders as year one, which is a lie a reader has no way to spot.
+	From  *time.Time `json:"from"`
+	Until *time.Time `json:"until"`
 	// WallClockSeconds is From to Until: how long the session took. LaneTimeSeconds is every lane's rows added up,
 	// which is larger whenever lanes ran at the same time. They answer different questions and are never the same
 	// number in a multi-agent session; don't present one as the other.
@@ -184,8 +185,8 @@ func buildTimeline(sum session.Summary, tl *timeline.Timeline, withRows bool) ti
 	body := timelineBody{
 		Session: toSession(sum),
 		Totals: totalsBody{
-			From:             tl.First.UTC(),
-			Until:            tl.Last.UTC(),
+			From:             nilable(tl.First),
+			Until:            nilable(tl.Last),
 			WallClockSeconds: seconds(tl.Duration()),
 			Rows:             len(tl.Rows),
 			Lanes:            len(tl.Lanes),
@@ -318,3 +319,13 @@ func gapsOrNone(gaps []gapBody) []gapBody {
 func seconds(d time.Duration) float64 { return round(d.Seconds()) }
 
 func round(s float64) float64 { return math.Round(s*1000) / 1000 }
+
+// nilable renders an instant the way this API's conventions ask for: UTC when it's known, and null when it isn't. A
+// zero date would serialize as year one, which reads as a real timestamp to anything downstream.
+func nilable(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	utc := t.UTC()
+	return &utc
+}

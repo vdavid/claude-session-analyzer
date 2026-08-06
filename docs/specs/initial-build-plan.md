@@ -1,6 +1,6 @@
 # Initial build plan
 
-Status: IN EXECUTION
+Status: M1 through M5 done. M6 is the wiring and publishing pass.
 
 ## What we're building
 
@@ -333,3 +333,36 @@ What this turned up:
    `r.Agent`, so lanes sharing a name (23 of them called `general-purpose` in session `9a4d3375`) each report the whole
    group's total: "alive 1m17s, working 4h00m". `docs/timeline-rules.md` already says to group by `LaneID`, not by
    `Agent`. Left alone deliberately, since it's outside this change; it's a one-line fix in the test.
+
+**M5 done.** The web app is in `web/`, a pnpm workspace beside the Go module. `/` lists every session on the machine;
+`/session/[id]` derives one on load and shows a concurrency trace, the two totals side by side, a donut of lane time by
+kind, a swimlane, and every row in a virtualized sheet. What each page shows and why: `docs/frontend.md`. Editing
+must-knows: `web/CLAUDE.md` and the colocated files under it.
+
+Numbers, cross-checked against the CLI on the 983-lane session (2026-08-06): 21,964 rows, 983 lanes, 13h13m elapsed,
+33h06m of lane time, and per-kind totals agreeing to the second. The aggregates render in about 1.5 s on the reference
+session and 2.5 s on the largest; the sheet's own fetch lands a couple of seconds behind.
+
+What the plan got wrong or missed here:
+
+1. **The API broke its own contract on a session with no timestamps.** `totals.from` and `totals.until` were plain
+   `time.Time`, so 99 of the 725 sessions on this machine answered `0001-01-01T00:00:00Z` where `docs/api.md` says
+   null, and the page rendered "1-01-01 00:53". They're `*time.Time` now, with
+   `TestATimelineWithNoTimestampsAnswersNullRatherThanYearOne` holding it. `parseInstant` in the frontend also floors
+   at 2024, so a zero date growing back upstream can't reach a reader.
+2. **A thousand lanes needed three answers, not one.** Collapsing workflows to a row each gets 983 lanes down to 18,
+   but an opened workflow is still 848 rows and a canvas that tall isn't a thing to ask a browser for. So rows also
+   scroll through a fixed window rather than shrinking, and an opened group is capped at 150 and says how many it held
+   back. The third answer is labelling: 848 lanes all named `workflow-subagent` are told apart by id prefix.
+3. **`GraphicComponent` and a fourth chart didn't earn their place.** The donut's centre label is HTML over the canvas,
+   which is crisper and one less ECharts component. A corpus histogram on the front page was built up to and then cut:
+   the hero carries the corpus totals instead, which is the same information without a chart nobody asked for.
+4. **TanStack Table hands `getState()` back verbatim.** A partial `state` leaves column pinning undefined and the first
+   header read throws, which the type checker can't see. The default state only exists once the table is built, so it's
+   merged in right after `createTable`.
+5. **The Svelte adapters weren't usable.** `@tanstack/svelte-table` only exists for v9, which was two days inside the
+   three-day release-age window, so the sheet wires the framework-agnostic core to runes itself. Same for the
+   virtualizer. Reasons and the upgrade path: `docs/frontend.md` § Dependency notes.
+6. **`minimumReleaseAge` doesn't live in `.npmrc` under pnpm 11.** It goes in `pnpm-workspace.yaml`; npm warns on the
+   key and pnpm 11 reads its settings from the workspace file. It earned its keep immediately, catching
+   `typescript-eslint@8.66.0` at two days old.

@@ -21,6 +21,8 @@ Apache-2.0.
   behind it. Read it before changing a rule in `internal/timeline`, and update it when you do.
 - **What the HTTP API answers**: `docs/api.md`. The contract the web app is built against, including the two totals a
   reader could confuse. Read it before changing a JSON shape in `internal/api`.
+- **What the web app shows and why**: `docs/frontend.md`. The two pages, the design system, and the decisions behind
+  both. Editing must-knows are in `web/CLAUDE.md` and the colocated files under it.
 - **The current build plan**: `docs/specs/initial-build-plan.md`. Plans get wiped periodically; durable knowledge
   belongs in `docs/`, not in a plan.
 - **Package docs**: each `internal/` package has a doc comment saying what it owns.
@@ -40,6 +42,9 @@ Apache-2.0.
   surface, so it's tested without a process.
 - `internal/api/`: the HTTP handlers and the JSON shapes. Contract in `docs/api.md`.
 - `internal/dotenv/`: reads the committed `.env` that holds the dev ports.
+- `web/`: the SvelteKit frontend, a pnpm workspace beside the Go module. `src/lib/transform/` holds the tested layer
+  (API JSON into chart series); `src/lib/components/charts/` holds one component per chart. `web/CLAUDE.md` first.
+- `scripts/check.js`: the one command that says whether the repo is green.
 - `docs/`: this repo's docs. `docs/specs/`: plans.
 
 ## Conventions
@@ -61,10 +66,19 @@ welcome. No em-dashes: use a colon, a comma, parentheses, or a different sentenc
 Docs here are for agents, not humans: prefer bullets to tables, and structure for retrieval. Describe current behavior,
 not how the code got there. Git holds the history.
 
+## Running it
+
+`pnpm dev` at the root starts both sides through `concurrently`: `go run ./cmd/claude-session-analyzer serve` and the
+Vite dev server, on the ports in the committed `.env`, both bound to `127.0.0.1`. One command, both logs, and stopping
+it stops both. The frontend reads the backend port from that same `.env`, so the two can't drift.
+
 ## Checks
 
-`gofmt -l .`, `go vet ./...`, and `go test ./...` all have to be green. M6 wires a single `pnpm check` over these plus
-the frontend gates.
+`pnpm check` at the root runs every gate, cheapest first, and stops at the first failure with that gate's full output:
+`gofmt -l`, `go vet`, `go test`, `prettier --check`, `eslint`, `svelte-check`, and `vitest`. Scope it with an argument,
+either a side (`pnpm check go`, `pnpm check web`) or a gate name (`pnpm check vitest`).
+
+A green run is not evidence a page works. Drive the app against a real session before calling frontend work done.
 
 Two more tests read transcripts off this machine, so they skip by default. Run them after anything that touches
 decoding, because hand-written fixtures can't catch format drift:
