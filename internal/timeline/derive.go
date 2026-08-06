@@ -43,7 +43,7 @@ func Derive(s *session.Session, opts Options) *Timeline {
 		}
 	}
 
-	nameWaits(tl)
+	nameWaits(tl, opts)
 	sort.SliceStable(tl.Rows, func(i, j int) bool { return tl.Rows[i].From.Before(tl.Rows[j].From) })
 	return tl
 }
@@ -95,6 +95,11 @@ type laneDeriver struct {
 	end    time.Time
 	rows   []Row
 
+	// stopped says the lane's turn ended and nothing has started a new one, so the time passing is idle rather than
+	// the agent thinking. woken says input has since arrived, which is where the next turn's thinking starts from.
+	stopped bool
+	woken   bool
+
 	// open holds the calls of the current batch that haven't come back yet, and batch holds the whole batch in the
 	// order it was issued. Both empty out together.
 	open  map[string]*call
@@ -111,21 +116,39 @@ func (d *laneDeriver) run() []Row {
 		switch {
 		case rec.Type == transcript.TypeAssistant && len(rec.Blocks) > 0:
 			d.flush(ts)
+			if d.stopped && !d.woken {
+				// The turn had ended and the lane resumed with nothing on record to say what woke it or when. The
+				// stretch is idle time, and the block that closed it can't claim any of it.
+				d.emitWait(ts, "idle after the turn ended", rec.Line)
+			}
+			d.working()
 			d.emitResponse(rec, ts)
 
 		case rec.Type == transcript.TypeUser && hasToolResults(rec):
+			d.working()
 			d.resolve(rec, ts)
 
 		case rec.Type == transcript.TypeUser && isPrompt(rec):
 			d.flush(ts)
-			d.emitWait(rec, ts)
+			d.emitWait(ts, waitInfo(rec), rec.Line)
+			d.working()
+
+		case rec.Type == transcript.TypeQueueOperation && d.stopped && isEnqueue(rec):
+			// Input that landed in the queue while the lane sat idle. Its timestamp is when the input actually
+			// arrived, which is where the wait ends and the next turn's thinking starts.
+			d.emitWait(ts, waitInfo(rec), rec.Line)
+			d.woken = true
+
+		case rec.Type == transcript.TypeSystem && rec.System != nil && isTurnEnd(rec.System.Subtype):
+			d.stopped = true
 
 		case rec.Type == transcript.TypeSystem && rec.System != nil && rec.System.Subtype == compactBoundary:
 			d.flush(ts)
 			d.emitCompaction(rec, ts)
 		}
-		// Anything else is bookkeeping: an attachment, a turn summary, a queue operation. It carries a timestamp but
-		// it isn't the lane doing something, so its time belongs to whichever row surrounds it.
+		// Anything else is bookkeeping: an attachment, a hook's output, a queue operation the lane wasn't waiting on.
+		// It carries a timestamp but it isn't the lane doing something, so its time belongs to whichever row surrounds
+		// it.
 	}
 
 	d.flush(d.end)
@@ -247,9 +270,12 @@ func (d *laneDeriver) flush(ts time.Time) {
 	}
 }
 
-// emitWait closes the gap before a prompt landed. A zero-length wait is dropped: the lane's very first record is a
-// prompt, and a wait of no time isn't worth a row.
-func (d *laneDeriver) emitWait(rec *transcript.Record, ts time.Time) {
+// working marks the lane as busy again, which is what a new turn's first record means.
+func (d *laneDeriver) working() { d.stopped, d.woken = false, false }
+
+// emitWait closes an idle gap. A zero-length wait is dropped: the lane's very first record is a prompt, and a wait of
+// no time isn't worth a row.
+func (d *laneDeriver) emitWait(ts time.Time, info string, line int) {
 	if !ts.After(d.cursor) {
 		d.cursor = ts
 		return
@@ -260,8 +286,8 @@ func (d *laneDeriver) emitWait(rec *transcript.Record, ts time.Time) {
 		Agent:  d.lane.Name,
 		LaneID: d.lane.ID,
 		Kind:   KindWaiting,
-		Info:   waitInfo(rec),
-		Line:   rec.Line,
+		Info:   info,
+		Line:   line,
 	})
 	d.cursor = ts
 }
@@ -312,6 +338,21 @@ func isPrompt(rec *transcript.Record) bool {
 
 // compactBoundary is the system record subtype that marks a finished compaction.
 const compactBoundary = "compact_boundary"
+
+// isTurnEnd says a system record marks the lane's turn ending. After one of these the lane is idle until something
+// starts a new turn, which is what keeps an overnight gap from being reported as overnight thinking.
+func isTurnEnd(subtype string) bool {
+	switch subtype {
+	case "turn_duration", "stop_hook_summary", "away_summary":
+		return true
+	}
+	return false
+}
+
+// isEnqueue says a queue record is input arriving rather than the harness clearing the queue.
+func isEnqueue(rec *transcript.Record) bool {
+	return rec.Queue != nil && rec.Queue.Operation == "enqueue"
+}
 
 // emitCompaction turns a finished compaction into its own row, and leaves the time before it as a wait.
 //

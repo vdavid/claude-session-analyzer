@@ -106,17 +106,23 @@ func timedOut(c *call, took time.Duration) (time.Duration, bool) {
 	return 0, false
 }
 
+// payloadString reads a text field off a tool result's structured payload.
+func payloadString(rec *transcript.Record, key string) (string, bool) {
+	raw, ok := payloadField(rec, key)
+	if !ok || len(raw) == 0 || raw[0] != '"' {
+		return "", false
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return "", false
+	}
+	return s, s != ""
+}
+
 // payloadInt reads a whole number off a tool result's structured payload. The payload is a bare string as often as
 // it's an object, and both are normal, so a shape that doesn't fit isn't an error.
 func payloadInt(rec *transcript.Record, key string) (int, bool) {
-	if rec == nil || len(rec.ToolUseResult) == 0 || rec.ToolUseResult[0] != '{' {
-		return 0, false
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(rec.ToolUseResult, &fields); err != nil {
-		return 0, false
-	}
-	raw, ok := fields[key]
+	raw, ok := payloadField(rec, key)
 	if !ok {
 		return 0, false
 	}
@@ -125,4 +131,18 @@ func payloadInt(rec *transcript.Record, key string) (int, bool) {
 		return 0, false
 	}
 	return int(n), true
+}
+
+// payloadField pulls one field out of a tool result's structured payload. The payload is a bare string as often as
+// it's an object, and both are normal, so a shape that doesn't fit isn't an error.
+func payloadField(rec *transcript.Record, key string) (json.RawMessage, bool) {
+	if rec == nil || len(rec.ToolUseResult) == 0 || rec.ToolUseResult[0] != '{' {
+		return nil, false
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(rec.ToolUseResult, &fields); err != nil {
+		return nil, false
+	}
+	raw, ok := fields[key]
+	return raw, ok
 }

@@ -137,8 +137,11 @@ func TestDeriveWaitsBetweenTurns(t *testing.T) {
 	}
 }
 
-// TestDeriveIgnoresBookkeepingRecords covers the records that carry a timestamp but aren't work: hook attachments,
-// turn summaries, and the queue. Their time belongs to whatever row surrounds them.
+// TestDeriveIgnoresBookkeepingRecords covers the records that carry a timestamp but aren't work: hook attachments and
+// turn summaries. Their time belongs to whatever row surrounds them.
+//
+// The queue is the exception, and only while the lane is idle: input arriving is a real moment, so it splits the wait
+// into "nothing had come in yet" and "it had come in and the lane hadn't picked it up".
 func TestDeriveIgnoresBookkeepingRecords(t *testing.T) {
 	lane := newLane("lead", true).
 		add(0, promptRec("go")).
@@ -152,10 +155,13 @@ func TestDeriveIgnoresBookkeepingRecords(t *testing.T) {
 
 	tl := Derive(sessionOf(lane), Options{})
 
-	requireKinds(t, tl.Rows, KindWriting, KindWaiting, KindWriting)
+	requireKinds(t, tl.Rows, KindWriting, KindWaiting, KindWaiting, KindWriting)
 	checkTiling(t, tl.Rows, at(0), at(75))
 	if got := tl.Rows[0].Duration(); got != 8*time.Second {
 		t.Errorf("the attachment should not have split the writing row, which lasted %s", got)
+	}
+	if got := tl.Rows[1].Duration(); got != 52*time.Second {
+		t.Errorf("the first wait lasted %s, want it to end when the input was queued", got)
 	}
 }
 

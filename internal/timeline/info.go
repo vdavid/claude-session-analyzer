@@ -133,6 +133,9 @@ func executionInfo(c *call, v verdict, batch int) string {
 	if c.result.IsError {
 		parts = append(parts, "the tool reported a failure")
 	}
+	if spawned := spawnInfo(c); spawned != "" {
+		parts = append(parts, spawned)
+	}
 	if batch > 1 {
 		parts = append(parts, "one of "+strconv.Itoa(batch)+" calls running at once")
 	}
