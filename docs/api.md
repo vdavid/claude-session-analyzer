@@ -17,14 +17,15 @@ the network, so the address isn't configurable.
 - Errors are `{"error": {"code", "message", "matches"}}`. `code` is what a caller branches on, `message` is what a
   person reads, and `matches` names the candidates when an id matched several.
 - Only the frontend's own origins (`http://127.0.0.1:19428` and `http://localhost:19428`, from `.env`) may read an
-  answer. Binding to loopback doesn't stop another page in the browser from calling the API, so the allowlist does.
+  answer. Binding to loopback doesn't stop another page in the browser from calling the API, so the allowlist does. A
+  preflight from one of those origins is answered with `204`; from anywhere else it isn't.
 
 ## `GET /api/sessions`
 
 Every session under the transcript root, newest first. Reads directory entries and the two ends of each transcript, so
 it costs about 140 ms over 722 sessions and 3.5 GB rather than parsing any of it.
 
-- `?limit=N` caps the page. `totals` still counts everything.
+- `?limit=N` caps the page, and `0` or no limit gives everything. `totals` counts every session either way.
 
 ```json
 {

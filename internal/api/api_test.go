@@ -106,6 +106,17 @@ func TestSessionsRejectsALimitThatIsntANumber(t *testing.T) {
 	}
 }
 
+func TestSessionsRejectsANegativeLimit(t *testing.T) {
+	rec := get(t, sessionRoot(), "/api/sessions?limit=-3")
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if code := decode[errorBody](t, rec).Error.Code; code != "bad_request" {
+		t.Errorf("code = %q", code)
+	}
+}
+
 func TestOneSessionResolvesFromAPrefix(t *testing.T) {
 	rec := get(t, sessionRoot(), "/api/sessions/1111")
 
@@ -292,6 +303,34 @@ func TestTheWrongMethodIs405WithAJSONBody(t *testing.T) {
 	}
 	if allow := rec.Header().Get("Allow"); allow != "GET" {
 		t.Errorf("Allow = %q, want GET", allow)
+	}
+}
+
+// TestAPreflightIsAnsweredForTheFrontendAndNobodyElse covers the request a fetch with an unusual header sends first.
+// It never reaches a route, so it has to be answered before the mux.
+func TestAPreflightIsAnsweredForTheFrontendAndNobodyElse(t *testing.T) {
+	handler := New(Options{Root: sessionRoot(), FrontendOrigins: []string{"http://127.0.0.1:19428"}})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "/api/sessions", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:19428")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want 204", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET" {
+		t.Errorf("Access-Control-Allow-Methods = %q, want GET", got)
+	}
+
+	other := httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodOptions, "/api/sessions", nil)
+	req.Header.Set("Origin", "http://evil.example")
+	handler.ServeHTTP(other, req)
+
+	if other.Code == http.StatusNoContent {
+		t.Error("a preflight from another origin shouldn't be waved through")
 	}
 }
 

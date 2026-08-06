@@ -57,9 +57,21 @@ func New(opts Options) http.Handler {
 // couldn't call the API at all; with a wildcard, any page in the browser could read the transcripts.
 func (s *server) withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		allowed := false
 		if origin := r.Header.Get("Origin"); origin != "" && slices.Contains(s.opts.FrontendOrigins, origin) {
+			allowed = true
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
+		}
+
+		// A plain GET needs no preflight, but a fetch carrying a header outside the safelist does, and answering it
+		// costs less than the afternoon spent working out why the browser gave up before it asked.
+		if r.Method == http.MethodOptions && allowed {
+			w.Header().Set("Access-Control-Allow-Methods", http.MethodGet)
+			w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
+			w.Header().Set("Access-Control-Max-Age", "600")
+			w.WriteHeader(http.StatusNoContent)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -204,6 +216,9 @@ func intParam(r *http.Request, name string) (int, error) {
 	n, err := strconv.Atoi(raw)
 	if err != nil {
 		return 0, fmt.Errorf("`%s` takes a number, and it got %q.", name, raw)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("`%s` can't be negative. Leave it out, or pass 0, to get everything.", name)
 	}
 	return n, nil
 }
