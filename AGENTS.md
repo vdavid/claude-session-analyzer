@@ -19,18 +19,26 @@ Apache-2.0.
   rediscovering it.
 - **How a timeline is derived**: `docs/timeline-rules.md`. Every judgement call the derivation makes, with the evidence
   behind it. Read it before changing a rule in `internal/timeline`, and update it when you do.
+- **What the HTTP API answers**: `docs/api.md`. The contract the web app is built against, including the two totals a
+  reader could confuse. Read it before changing a JSON shape in `internal/api`.
 - **The current build plan**: `docs/specs/initial-build-plan.md`. Plans get wiped periodically; durable knowledge
   belongs in `docs/`, not in a plan.
 - **Package docs**: each `internal/` package has a doc comment saying what it owns.
 
 ## Layout
 
+- `cmd/claude-session-analyzer/`: the binary, nine lines over `internal/cli`.
 - `internal/transcript/`: the on-disk format. Record and block decoding, and a streaming line reader that survives
   megabyte-long lines. Retains nothing, so it works on the whole 3.8 GB corpus.
-- `internal/session/`: session discovery under `~/.claude/projects`, and `Lane`, the lead plus one per subagent, each
-  with its ordered records.
+- `internal/session/`: session discovery under `~/.claude/projects`, `Lane` (the lead plus one per subagent, each with
+  its ordered records), and `List`, which summarizes every session on disk by reading only the two ends of each
+  transcript.
 - `internal/timeline/`: `Lane` records become activity rows. The seven activity kinds, tool classification, stall and
   timeout detection, and waiting attribution. Rules in `docs/timeline-rules.md`.
+- `internal/cli/`: the `sessions`, `timeline`, and `serve` subcommands. `cli.Run(args, stdout, stderr) int` is the whole
+  surface, so it's tested without a process.
+- `internal/api/`: the HTTP handlers and the JSON shapes. Contract in `docs/api.md`.
+- `internal/dotenv/`: reads the committed `.env` that holds the dev ports.
 - `docs/`: this repo's docs. `docs/specs/`: plans.
 
 ## Conventions
@@ -62,6 +70,8 @@ decoding, because hand-written fixtures can't catch format drift:
 
 - One session: `CSA_REAL_SESSION_ID=<id or unique prefix> go test ./internal/session -run RealSession -v`. Reports
   lanes, timings, and every record type it skipped.
+- Every session, listed the cheap way and cross-checked against a full parse: `CSA_REAL_LIST=1 go test ./internal/session
+  -run RealListing -v`. Takes about a second, and catches a listing that reads the wrong end of a file.
 - Every transcript on the machine: `CSA_SWEEP=1 go test ./internal/session -run CorpusSweep -v -timeout 20m`. Takes
   about 35 s over 4,438 transcripts. A record type appearing in its skip list that isn't in
   `docs/transcript-format.md` means the format moved.

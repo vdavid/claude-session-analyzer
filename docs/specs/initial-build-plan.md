@@ -258,3 +258,36 @@ For M3 and M4: `Columns()` and `Row.Fields()` hold the CSV contract, `Timeline.R
 `IsError`, and the transcript `Line`, so an API can expose more than the six CSV columns. Group by `LaneID`, not by
 `Agent`: two lanes can share a name when neither has a `.meta.json`. Parallel tool executions overlap on purpose, so
 per-kind totals can exceed a session's wall clock, which is the honest answer rather than a rounded one.
+
+**M3 and M4 done**, together: both are thin surfaces over the same engine, and splitting them would have cost more in
+handoff than it saved. `internal/cli` holds the three subcommands, `internal/api` the handlers and JSON shapes
+(contract: `docs/api.md`), `internal/dotenv` the `.env` reader, and `session.List` the cheap listing.
+
+Numbers, measured on this machine (2026-08-06, 722 sessions, 3,258 subagent lanes, 3.5 GB):
+
+- `sessions` over the whole corpus: 0.25 s end to end, of which the listing itself is 150 ms.
+- `timeline` on the reference session (28 lanes): 0.9 s, 15,944 rows. On the 983-lane session: 1.7 s, 21,964 rows.
+- `/api/sessions`: 273 KB in 140 ms. The reference session's timeline: 5.5 MB in 0.7 s, or 40 KB with `?rows=false`.
+  The 983-lane one: 7.7 MB in 1.6 s, or 364 KB without rows.
+
+What the plan got wrong or missed here:
+
+1. **The session list wanted a listing engine, not a CLI feature.** `session.List` reads directory entries, a 16 KB
+   head, and a 64 KB tail per session, growing either window when what it's after isn't in it. A counting `io.ReaderAt`
+   holds it to that in a test, and `TestRealListing` (`CSA_REAL_LIST=1`) cross-checks every session against a full
+   parse. All 722 agree on title, project, subagent count, start, and end.
+2. **"Lanes" meant two different numbers.** A session summary counts the subagents it spawned; a timeline counts every
+   lane, the lead included. They're now `subagents` and `totals.lanes`, one apart on purpose.
+3. **A subagent can outlive the lead**, by 20 minutes on the reference session. So a session's `start` and `end` (the
+   lead's) and a timeline's `totals.from` and `totals.until` (every lane's) are separate fields rather than one.
+4. **The 983-lane session is fine, but its rows aren't.** 7.7 MB of JSON for one page, against 364 KB for the
+   aggregates alone, so the timeline endpoint takes `?rows=false`. M5 should fetch the aggregates first and the sheet
+   on demand.
+5. **CORS is load-bearing and the plan doesn't mention it.** The dev frontend on 19428 is a different origin from the
+   API on 19427, so without an allowlist the browser blocks every call. It names the frontend's two origins and nothing
+   else; a wildcard would let any page in the browser read the transcripts.
+6. **The flag package stops at the first positional argument**, which would make `timeline <id> --out file.csv` fail.
+   `parseArgs` sets the argument aside and carries on, so flags work on either side of the id.
+
+For M5: `docs/api.md` is the contract. Group rows by `laneId`, never by `agent`; draw the swimlane from `lanes[].gaps`
+rather than one solid bar; and label the pie as a breakdown of lane time, not of the session's wall clock.

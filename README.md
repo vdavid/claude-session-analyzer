@@ -9,15 +9,29 @@ on disk and answers that.
 
 ## Status
 
-Early. The parse engine is in; the timeline, the CLI, the HTTP API, and the web UI are being built on top of it. There's
-nothing to run yet.
+Early. The engine, the command line, and the HTTP API are in. The web app is next, so `serve` currently answers with
+JSON and nothing to look at.
 
-## What it will do
+## Quick start
 
-- `claude-session-analyzer timeline <session-id>`: a CSV of every activity span, one row per content block.
-- `claude-session-analyzer sessions`: what's on disk.
-- `claude-session-analyzer serve`: a local web app with a time-spent pie, an agent-liveness swimlane, and a sortable
-  data sheet.
+```sh
+go build -o claude-session-analyzer ./cmd/claude-session-analyzer
+
+./claude-session-analyzer sessions                 # what's on disk, newest first
+./claude-session-analyzer timeline 532ac591        # the CSV, to standard output
+./claude-session-analyzer timeline 532ac591 --out timeline.csv
+./claude-session-analyzer serve                    # the API on http://127.0.0.1:19427
+```
+
+A session id can be any prefix that matches one session, which is why `532ac591` works. `sessions` lists 722 sessions
+and 3.5 GB in a quarter of a second, because it reads the two ends of each transcript rather than any of the middle.
+
+## The CSV
+
+One row per stretch of one agent's wall clock, in six columns: `From`, `Until`, `Agent`, `Activity`, `Extra info`, and
+`Duration (s)`. `Activity` is one of thinking, writing, tool call, tool execution, waiting, stalled, or compacting.
+Within an agent the rows tile: each starts where the last ended, so nothing is unaccounted for and nothing is counted
+twice. What each activity means, and every judgement call behind it, is in `docs/timeline-rules.md`.
 
 ## How it works
 
@@ -37,6 +51,8 @@ These are honest, not temporary:
   and in prompt processing lands inside the thinking span. On a large context that's a real share of it.
 - **Stall detection is a heuristic.** A long build isn't a stall, but a six-hour `rm` is, and the line between them is
   drawn by a threshold, not by evidence in the file.
+- **Time per activity adds up to more than the session took.** Agents run at the same time, so a three-day session can
+  hold five days of agent time. That's the honest answer, and both numbers are reported separately.
 
 ## License
 
