@@ -3,6 +3,8 @@ package timeline
 import (
 	"testing"
 	"time"
+
+	"github.com/vdavid/claude-session-analyzer/internal/transcript"
 )
 
 // checkTiling asserts the property the whole package rests on: a lane's rows cover its span exactly once. Every row
@@ -226,4 +228,24 @@ func TestDeriveSkipsAnEmptyLane(t *testing.T) {
 		t.Fatalf("a lane with no timestamps should not get a span, got %d", len(tl.Lanes))
 	}
 	checkTiling(t, tl.Rows, at(0), at(5))
+}
+
+// TestDeriveAbsorbsUnknownBlocks covers a block type nothing decodes. The one in the wild is `fallback`, which marks
+// the harness switching models mid-response, and it isn't the agent doing anything. Its stretch belongs to the row
+// that follows, and a record that produces no rows must not move the lane on without one.
+func TestDeriveAbsorbsUnknownBlocks(t *testing.T) {
+	lane := newLane("lead", true).
+		add(0, promptRec("go")).
+		add(10, assistantRec(transcript.Block{Type: "fallback"})).
+		add(25, assistantRec(thinkingBlock(""))).
+		add(26, assistantRec(textBlock("done"))).
+		done()
+
+	tl := Derive(sessionOf(lane), Options{})
+
+	requireKinds(t, tl.Rows, KindThinking, KindWriting)
+	checkTiling(t, tl.Rows, at(0), at(26))
+	if got := tl.Rows[0].Duration(); got != 25*time.Second {
+		t.Errorf("the thinking row lasted %s, want it to absorb the stretch the fallback block covered", got)
+	}
 }

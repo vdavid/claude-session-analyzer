@@ -26,7 +26,7 @@ func oneCall(t *testing.T, took time.Duration, block blockSpec, payload string) 
 
 	rows := Derive(sessionOf(lane), Options{}).Rows
 	for _, r := range rows {
-		if r.Kind == KindToolExecution || r.Kind == KindStalled {
+		if r.Tool != "" && r.Kind != KindToolCall {
 			return r
 		}
 	}
@@ -237,5 +237,23 @@ func TestUnfinishedCallIsNeverStalled(t *testing.T) {
 	}
 	if !strings.Contains(last.Info, "no result in the transcript") {
 		t.Errorf("the row should say the result never arrived, got %q", last.Info)
+	}
+}
+
+// TestAskingAPersonIsWaiting covers the tools that block on a human answering. Across every session on the machine
+// this was built against, three of the five rows the stall rule flagged were `AskUserQuestion` calls left open for
+// hours, which is not a suspended agent: it's the agent doing the one thing it's meant to do when it needs a person.
+func TestAskingAPersonIsWaiting(t *testing.T) {
+	for _, tool := range []string{"AskUserQuestion", "ExitPlanMode"} {
+		t.Run(tool, func(t *testing.T) {
+			row := oneCall(t, 26*time.Hour, blockSpec{tool: tool, key: "question", arg: "Which option?"}, "")
+
+			if row.Kind != KindWaiting {
+				t.Errorf("got %q, want waiting: %s", row.Kind, row.Info)
+			}
+			if !strings.Contains(row.Info, "waiting for an answer to "+tool) {
+				t.Errorf("the row says %q, want it to name what the answer was for", row.Info)
+			}
+		})
 	}
 }

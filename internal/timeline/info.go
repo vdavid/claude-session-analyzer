@@ -140,6 +140,17 @@ func labelThinking(rows []Row) {
 
 // executionInfo labels a tool execution or a stalled row: what ran, and anything unusual about how it ended.
 func executionInfo(c *call, v verdict, batch int) string {
+	if v.kind == KindWaiting {
+		info := "waiting for an answer to " + c.block.ToolName
+		if c.subject != "" {
+			info += ": " + c.subject
+		}
+		if !c.resolved {
+			info += "; no answer in the transcript"
+		}
+		return info
+	}
+
 	parts := []string{describe(c.block.ToolName, c.class, c.subject)}
 
 	switch {

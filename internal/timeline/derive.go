@@ -174,6 +174,7 @@ func (d *laneDeriver) forward(ts time.Time) time.Time {
 // is the thinking block, which is where the time actually went.
 func (d *laneDeriver) emitResponse(rec *transcript.Record, ts time.Time) {
 	from := d.cursor
+	emitted := false
 	for _, b := range rec.Blocks {
 		row := Row{From: from, Until: ts, Agent: d.lane.Name, LaneID: d.lane.ID, Line: rec.Line}
 		from = ts // every block after the first is zero-length
@@ -194,11 +195,17 @@ func (d *laneDeriver) emitResponse(rec *transcript.Record, ts time.Time) {
 			d.open[b.ToolUseID] = c
 			d.batch = append(d.batch, c)
 		default:
-			continue // an unexpected block type costs no time rather than costing us the record
+			// A block type nothing decodes gets no row and no time. `fallback`, which marks the harness switching
+			// models mid-response, is the one seen in the wild, and it isn't the agent doing anything. Leaving the
+			// cursor alone hands its stretch to the row that follows, which is where the time really went.
+			continue
 		}
 		d.rows = append(d.rows, row)
+		emitted = true
 	}
-	d.cursor = ts
+	if emitted {
+		d.cursor = ts
+	}
 }
 
 // resolve matches a result record against the calls still open, and flushes the batch once they're all back.
@@ -278,7 +285,6 @@ func (d *laneDeriver) working() { d.stopped, d.woken = false, false }
 // no time isn't worth a row.
 func (d *laneDeriver) emitWait(ts time.Time, info string, line int) {
 	if !ts.After(d.cursor) {
-		d.cursor = ts
 		return
 	}
 	d.rows = append(d.rows, Row{

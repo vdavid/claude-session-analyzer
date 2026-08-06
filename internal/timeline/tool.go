@@ -33,6 +33,9 @@ const (
 	ClassFileWrite ToolClass = "file write"
 	// ClassAgent is spawning or messaging a teammate.
 	ClassAgent ToolClass = "agent"
+	// ClassAsk is a tool that blocks until a person answers. The agent isn't working and isn't suspended: it's waiting
+	// on a human, which is its own row kind.
+	ClassAsk ToolClass = "ask"
 	// ClassMCP is a call into an MCP server.
 	ClassMCP ToolClass = "mcp"
 	// ClassWeb is fetching or searching the web.
@@ -62,26 +65,28 @@ var precedenceRank = func() map[ToolClass]int {
 
 // toolClasses maps the tools that say what they are by name. Bash isn't here: its class comes from its command.
 var toolClasses = map[string]ToolClass{
-	"Read":         ClassFileRead,
-	"NotebookRead": ClassFileRead,
-	"Write":        ClassFileWrite,
-	"Edit":         ClassFileWrite,
-	"MultiEdit":    ClassFileWrite,
-	"NotebookEdit": ClassFileWrite,
-	"Glob":         ClassSearch,
-	"Grep":         ClassSearch,
-	"ToolSearch":   ClassSearch,
-	"Agent":        ClassAgent,
-	"Task":         ClassAgent,
-	"SendMessage":  ClassAgent,
-	"TaskCreate":   ClassAgent,
-	"TaskUpdate":   ClassAgent,
-	"TaskList":     ClassAgent,
-	"TaskGet":      ClassAgent,
-	"WebFetch":     ClassWeb,
-	"WebSearch":    ClassWeb,
-	"BashOutput":   ClassShell,
-	"KillShell":    ClassShell,
+	"Read":            ClassFileRead,
+	"NotebookRead":    ClassFileRead,
+	"Write":           ClassFileWrite,
+	"Edit":            ClassFileWrite,
+	"MultiEdit":       ClassFileWrite,
+	"NotebookEdit":    ClassFileWrite,
+	"Glob":            ClassSearch,
+	"Grep":            ClassSearch,
+	"ToolSearch":      ClassSearch,
+	"Agent":           ClassAgent,
+	"Task":            ClassAgent,
+	"SendMessage":     ClassAgent,
+	"TaskCreate":      ClassAgent,
+	"TaskUpdate":      ClassAgent,
+	"TaskList":        ClassAgent,
+	"TaskGet":         ClassAgent,
+	"AskUserQuestion": ClassAsk,
+	"ExitPlanMode":    ClassAsk,
+	"WebFetch":        ClassWeb,
+	"WebSearch":       ClassWeb,
+	"BashOutput":      ClassShell,
+	"KillShell":       ClassShell,
 }
 
 // programClasses maps a command's program to its class. A program that means different things by subcommand is
