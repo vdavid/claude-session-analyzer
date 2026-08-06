@@ -1,6 +1,6 @@
 # Initial build plan
 
-Status: M1 through M5 done. M6 is the wiring and publishing pass.
+Status: M1 through M6 done, apart from creating the GitHub repo, which waits on David.
 
 ## What we're building
 
@@ -363,3 +363,32 @@ What the plan got wrong or missed here:
 6. **`minimumReleaseAge` doesn't live in `.npmrc` under pnpm 11.** It goes in `pnpm-workspace.yaml`; npm warns on the
    key and pnpm 11 reads its settings from the workspace file. It earned its keep immediately, catching
    `typescript-eslint@8.66.0` at two days old.
+
+**M6 done, apart from the repo.** The docs, the checks, and the honesty pass all landed; publishing didn't.
+
+- **Six colocated `CLAUDE.md` files**, one per `internal/` package. `cmd/claude-session-analyzer/` doesn't get one: nine
+  lines over `internal/cli` has nothing to warn about.
+- **`scripts/docgraph`** holds every markdown file to being reachable from `AGENTS.md`, with no dead paths and no link
+  repeating its own target. It found three orphans on its first run, all under `web/src/lib/`. Wired in as
+  `pnpm check docgraph`, and `pnpm check` now scopes by `go` / `web` / `docs` rather than by side.
+- **Prettier moved to the repo root** and formats the markdown too, so a doc reflows rather than drifting a column at a
+  time.
+- **The entrance animation stopped fading.** Text composited mid-fade sits around 2:1, so the page was under AA for the
+  420 ms it ran. It moves and doesn't fade now.
+- **`README.md` is written and is a draft for David**, including a limitations section that says outright which numbers
+  are heuristics and that the two-hour cap on a failed request is a guess.
+
+What this turned up:
+
+1. **The per-lane bug in `TestRealTimeline` was one of a kind, not a pattern.** Nothing else in the engine, the API, or
+   the frontend aggregates by `Agent`; every other path already keys on `laneId`.
+2. **Two notices quoted one machine's session count at the reader.** "99 of the 725 sessions on this machine" is true
+   here and false everywhere else, which is not a thing a published tool should say.
+3. **A guardrail was wrong.** `web/CLAUDE.md` said Tailwind's opacity modifiers don't work on the theme tokens; the
+   compiled CSS emits a `color-mix()` behind `@supports`, and the sticky header had been relying on it all along.
+4. **The corpus counts had drifted**, which is expected: it grows while it's being measured. The docs now say so once,
+   up front, rather than reading as three contradictory numbers.
+5. **Creating the GitHub repo is left to David.** It's the one step that puts something under his name where other
+   people can see it, and his own rule is that he reviews anything human-facing before that happens. The README is a
+   draft awaiting exactly that review, so publishing ahead of it would be the wrong order. One command does it, and it's
+   in the handover.
