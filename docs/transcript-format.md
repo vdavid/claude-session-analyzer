@@ -17,7 +17,7 @@ Verification base: a 57 MB multi-agent session (`532ac591-b7c5-45ca-a764-f40f01a
     - `subagents/agent-a<something>.jsonl`: one transcript per subagent lane.
     - `subagents/agent-a<something>.meta.json`: the lane's metadata. Often missing; see below.
     - `subagents/workflows/wf_<id>/agent-a<something>.jsonl`: the same thing for agents a workflow spawned, one level
-      deeper, with their own `.meta.json` files. These are real lanes doing real work and it's easy to miss them: one
+      deeper, with their own `.meta.json` files. These are real lanes doing real work, and missing them costs a lot: one
       session in the corpus holds 977 of them against five direct subagents. Agent transcripts live at exactly these
       two depths, nowhere else (verified 2026-08-06 across all 3,708 of them).
     - `subagents/workflows/wf_<id>/journal.jsonl`: the workflow's own log, not a lane. Its records are `started` and

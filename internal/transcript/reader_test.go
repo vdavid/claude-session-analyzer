@@ -2,6 +2,8 @@ package transcript
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -424,4 +426,84 @@ func TestReaderReportsEmptyInput(t *testing.T) {
 	if len(got) != 0 || stats.Lines != 0 || stats.Decoded != 0 {
 		t.Errorf("records = %d, stats = %+v", len(got), stats)
 	}
+}
+
+func TestReaderHandlesLineEndingEdgeCases(t *testing.T) {
+	record := `{"type":"assistant","uuid":"%s","timestamp":"2026-08-03T08:44:05.000Z",` +
+		`"message":{"role":"assistant","content":[{"type":"text","text":"Fine."}]}}`
+
+	tests := []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "a final line with no trailing newline still counts",
+			body: fmt.Sprintf(record, "a") + "\n" + fmt.Sprintf(record, "b"),
+			want: []string{"a", "b"},
+		},
+		{
+			name: "carriage returns are trimmed",
+			body: fmt.Sprintf(record, "a") + "\r\n" + fmt.Sprintf(record, "b") + "\r\n",
+			want: []string{"a", "b"},
+		},
+		{
+			name: "blank lines in the middle are stepped over",
+			body: fmt.Sprintf(record, "a") + "\n\n   \n" + fmt.Sprintf(record, "b") + "\n",
+			want: []string{"a", "b"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "lane.jsonl")
+			if err := os.WriteFile(path, []byte(tt.body), 0o600); err != nil {
+				t.Fatalf("write fixture: %v", err)
+			}
+
+			got, stats := readAll(t, path, Options{})
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("records = %d, want %d", len(got), len(tt.want))
+			}
+			for i, w := range tt.want {
+				if got[i].UUID != w {
+					t.Errorf("record %d = %q, want %q", i, got[i].UUID, w)
+				}
+			}
+			if stats.Malformed != 0 {
+				t.Errorf("malformed = %d, want 0", stats.Malformed)
+			}
+		})
+	}
+}
+
+func TestReaderStopsAtAReadError(t *testing.T) {
+	r := NewReader(&errAfter{body: []byte(`{"type":"assistant","uuid":"a"}` + "\n")}, Options{})
+
+	var got int
+	for r.Next() {
+		got++
+	}
+
+	if got != 1 {
+		t.Errorf("records = %d, want the one that came before the error", got)
+	}
+	if r.Err() == nil {
+		t.Error("a read error should surface through Err, unlike a malformed line")
+	}
+}
+
+// errAfter hands out its body once and then fails, the way a truncated read does.
+type errAfter struct {
+	body []byte
+	done bool
+}
+
+func (e *errAfter) Read(p []byte) (int, error) {
+	if e.done {
+		return 0, errors.New("disk went away")
+	}
+	e.done = true
+	return copy(p, e.body), nil
 }

@@ -194,7 +194,7 @@ func TestLoadHandlesASessionWithNoSubagents(t *testing.T) {
 	}
 
 	if len(s.Lanes) != 1 || !s.Lanes[0].IsLead {
-		t.Fatalf("lanes = %d, want just the lead", len(s.Lanes))
+		t.Fatalf("lanes = %d, want only the lead", len(s.Lanes))
 	}
 	if s.Title != "" {
 		t.Errorf("title = %q, want empty when the transcript carries none", s.Title)

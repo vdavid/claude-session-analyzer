@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -25,7 +26,8 @@ type Options struct {
 	MaxValueBytes int
 }
 
-func (o Options) cap() int {
+// valueLimit is the cap to apply, resolving the zero value.
+func (o Options) valueLimit() int {
 	if o.MaxValueBytes == 0 {
 		return DefaultMaxValueBytes
 	}
@@ -89,7 +91,7 @@ func (r *Reader) Next() bool {
 			r.stats.LongestLine = len(line)
 		}
 
-		trimmed := trimSpace(line)
+		trimmed := bytes.TrimSpace(line)
 		if len(trimmed) == 0 {
 			r.stats.Blank++
 			continue
@@ -111,13 +113,13 @@ func (r *Reader) Next() bool {
 			continue
 		}
 
-		r.rec = wire.toRecord(r.line, r.opts.cap())
+		r.rec = wire.toRecord(r.line, r.opts.valueLimit())
 		r.stats.Decoded++
 		return true
 	}
 }
 
-// Record returns the record Next just decoded.
+// Record returns the record the last call to Next decoded.
 func (r *Reader) Record() *Record { return r.rec }
 
 // Err returns the first read error, if any. A malformed line isn't one: it's counted in Stats.
@@ -149,22 +151,9 @@ func (r *Reader) readLine() ([]byte, error) {
 		if len(r.buf) == 0 {
 			return chunk, nil
 		}
-		return append(r.buf, chunk...), nil
+		r.buf = append(r.buf, chunk...)
+		return r.buf, nil
 	}
-}
-
-func trimSpace(b []byte) []byte {
-	for len(b) > 0 && (b[0] == ' ' || b[0] == '\t' || b[0] == '\r' || b[0] == '\n') {
-		b = b[1:]
-	}
-	for len(b) > 0 {
-		c := b[len(b)-1]
-		if c != ' ' && c != '\t' && c != '\r' && c != '\n' {
-			break
-		}
-		b = b[:len(b)-1]
-	}
-	return b
 }
 
 func isDecodedType(t string) bool {
