@@ -88,6 +88,31 @@ func TestAPIErrorIsBoundedByItsRetryWindow(t *testing.T) {
 	if got := rows[1].Duration(); got != 2199995*time.Second-DefaultMaxAPIErrorSpan {
 		t.Errorf("the wait lasted %s, want everything the outage can't account for", got)
 	}
+	if !strings.Contains(rows[1].Info, "nothing on record saying when the failed request was made") {
+		t.Errorf("the wait says %q, want it to say why it can't be attributed", rows[1].Info)
+	}
+}
+
+// TestNothingExplainsAGapAfterAFailedRequest covers the residual case: the API refused, and the next thing in the lane
+// is the agent working again with nothing in between. The gap is idle time, and the only thing that can be said about
+// it is what the lane was doing when it stopped.
+func TestNothingExplainsAGapAfterAFailedRequest(t *testing.T) {
+	lane := newLane("lead", true).
+		add(0, promptRec("go")).
+		add(5, assistantRec(textBlock("on it"))).
+		add(20, apiErrorRec("server_error", 500, "API Error: 500 Internal server error")).
+		add(5000, assistantRec(textBlock("back"))).
+		done()
+
+	rows := Derive(sessionOf(lane), Options{}).Rows
+
+	requireKinds(t, rows, KindWriting, KindAPIError, KindWaitingUnknown, KindWriting)
+	if !strings.Contains(rows[2].Info, "idle after the API call failed") {
+		t.Errorf("the wait says %q, want it to say the API had refused", rows[2].Info)
+	}
+	if rows[3].Duration() != 0 {
+		t.Errorf("the block that closed the gap can't claim it: %s", rowSummary(rows[3]))
+	}
 }
 
 // TestAPIErrorAfterATurnEndedClaimsNoTime covers a lane with nothing in flight. The turn was over, so the stretch
