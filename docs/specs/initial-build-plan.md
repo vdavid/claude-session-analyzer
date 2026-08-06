@@ -232,3 +232,29 @@ trust from here:
 
 Also worth knowing for M2: subagent `.meta.json` is often missing or partial, so `Lane.Name` already falls back
 through `name` → `agentType` → agent id, and `Meta.Color` is empty often enough that the UI needs its own palette.
+
+**M2 done.** `internal/timeline` turns lanes into rows. Rules and their evidence: `docs/timeline-rules.md`. Verified by
+deriving all 720 sessions on this machine (3,879 lanes, 776k rows), which is where three real bugs turned up.
+
+What the plan got wrong or missed here:
+
+1. **Six activity kinds is seven.** Compaction is real wall clock that's neither the agent nor a tool, 132 s in the
+   reference session, so `compacting` is its own kind.
+2. **`AskUserQuestion` breaks the stall rule.** Three of the five stalls in the whole corpus were questions a person
+   took hours to answer, which is `waiting`, not a suspended agent. Tools that block on a human are their own class.
+3. **Idle time is much harder to spot than the plan assumes.** Decision 8 talks about what ends a wait, but the harder
+   half is noticing the lane went idle at all: a lane that sits silent and then produces a block reports the whole
+   stretch as thinking. Three signals in order of trust (a turn-end record, input arriving, and a span too long to be
+   a response) now cover it. Before them the corpus held a 596-hour `writing` row and a 7h23m `thinking` row.
+4. **Queued input is half the story.** 41 of the reference session's 78 long idle gaps end at a `queue-operation:
+   enqueue` rather than at a prompt, and the queue has four operations, not two.
+5. **The golden file is a hand-built fixture, not a trimmed real session.** The repo is public and the transcripts on
+   this machine aren't. The fixture is modelled on the real shapes and covers more cases than a trim would; the
+   reference-session checks that run against actual data are env-gated (`RealTimeline`, `RealAnomalies`,
+   `RealTimelineSweep`).
+
+For M3 and M4: `Columns()` and `Row.Fields()` hold the CSV contract, `Timeline.Records()` renders the whole thing, and
+`Timeline.TotalsByKind()` sums the durations. Rows carry `LaneID`, `Tool`, `Class`, `Overlapped`, `TimedOut`,
+`IsError`, and the transcript `Line`, so an API can expose more than the six CSV columns. Group by `LaneID`, not by
+`Agent`: two lanes can share a name when neither has a `.meta.json`. Parallel tool executions overlap on purpose, so
+per-kind totals can exceed a session's wall clock, which is the honest answer rather than a rounded one.
