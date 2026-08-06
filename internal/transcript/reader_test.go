@@ -41,9 +41,9 @@ func mustTime(t *testing.T, s string) time.Time {
 func TestReaderDecodesEveryRecordType(t *testing.T) {
 	got, _ := readAll(t, filepath.Join("testdata", "lane.jsonl"), Options{})
 
-	// Unknown types are skipped, so the fixture's 14 lines yield 12 records.
-	if len(got) != 12 {
-		t.Fatalf("record count = %d, want 12", len(got))
+	// One line holds a type this package doesn't decode, so the fixture's 14 lines yield 13 records.
+	if len(got) != 13 {
+		t.Fatalf("record count = %d, want 13", len(got))
 	}
 
 	tests := []struct {
@@ -52,8 +52,23 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		check func(t *testing.T, rec *Record)
 	}{
 		{
-			name:  "user prompt carries its text and context",
+			name:  "a custom title is decoded so a session list can show it",
 			index: 0,
+			check: func(t *testing.T, rec *Record) {
+				if rec.Type != TypeCustomTitle {
+					t.Errorf("type = %q, want %q", rec.Type, TypeCustomTitle)
+				}
+				if rec.Title != "Trying a thing" {
+					t.Errorf("title = %q", rec.Title)
+				}
+				if !rec.Timestamp.IsZero() {
+					t.Errorf("timestamp = %v, want zero: title records carry none", rec.Timestamp)
+				}
+			},
+		},
+		{
+			name:  "user prompt carries its text and context",
+			index: 1,
 			check: func(t *testing.T, rec *Record) {
 				if rec.Type != TypeUser {
 					t.Errorf("type = %q, want %q", rec.Type, TypeUser)
@@ -77,7 +92,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "thinking block keeps its signature and empty text",
-			index: 1,
+			index: 2,
 			check: func(t *testing.T, rec *Record) {
 				if rec.Type != TypeAssistant {
 					t.Fatalf("type = %q", rec.Type)
@@ -101,7 +116,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "tool use keeps its id, name, and input",
-			index: 2,
+			index: 3,
 			check: func(t *testing.T, rec *Record) {
 				if len(rec.Blocks) != 1 {
 					t.Fatalf("blocks = %d", len(rec.Blocks))
@@ -121,7 +136,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "tool result pairs on the tool use id",
-			index: 3,
+			index: 4,
 			check: func(t *testing.T, rec *Record) {
 				if rec.Type != TypeUser || len(rec.Blocks) != 1 {
 					t.Fatalf("record = %+v", rec)
@@ -143,7 +158,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "attachment keeps its kind",
-			index: 4,
+			index: 5,
 			check: func(t *testing.T, rec *Record) {
 				if rec.Type != TypeAttachment || rec.Attachment != "hook_success" {
 					t.Errorf("record = %q / %q", rec.Type, rec.Attachment)
@@ -152,7 +167,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "text block carries the prose",
-			index: 5,
+			index: 6,
 			check: func(t *testing.T, rec *Record) {
 				if len(rec.Blocks) != 1 || rec.Blocks[0].Type != BlockText {
 					t.Fatalf("blocks = %+v", rec.Blocks)
@@ -164,7 +179,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "queue enqueue carries what the user typed and when",
-			index: 6,
+			index: 7,
 			check: func(t *testing.T, rec *Record) {
 				if rec.Type != TypeQueueOperation {
 					t.Fatalf("type = %q", rec.Type)
@@ -182,7 +197,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "one record can hold several blocks including parallel tool calls",
-			index: 7,
+			index: 8,
 			check: func(t *testing.T, rec *Record) {
 				if len(rec.Blocks) != 4 {
 					t.Fatalf("blocks = %d, want 4", len(rec.Blocks))
@@ -203,7 +218,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "tool result with array content is flattened and its error flag kept",
-			index: 8,
+			index: 9,
 			check: func(t *testing.T, rec *Record) {
 				if len(rec.Blocks) != 1 {
 					t.Fatalf("blocks = %d", len(rec.Blocks))
@@ -219,7 +234,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "harness-injected user records are marked, not hidden",
-			index: 9,
+			index: 10,
 			check: func(t *testing.T, rec *Record) {
 				if !rec.IsMeta {
 					t.Error("isMeta should be true")
@@ -231,7 +246,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "turn duration is decoded",
-			index: 10,
+			index: 11,
 			check: func(t *testing.T, rec *Record) {
 				if rec.Type != TypeSystem || rec.System == nil {
 					t.Fatalf("record = %+v", rec)
@@ -246,7 +261,7 @@ func TestReaderDecodesEveryRecordType(t *testing.T) {
 		},
 		{
 			name:  "compaction reports how long it took and what it dropped",
-			index: 11,
+			index: 12,
 			check: func(t *testing.T, rec *Record) {
 				if rec.System == nil || rec.System.Compact == nil {
 					t.Fatalf("record = %+v", rec)
@@ -275,10 +290,10 @@ func TestReaderSkipsUnknownTypesWithoutFailing(t *testing.T) {
 	if stats.Lines != 14 {
 		t.Errorf("lines = %d, want 14", stats.Lines)
 	}
-	if stats.Decoded != 12 {
-		t.Errorf("decoded = %d, want 12", stats.Decoded)
+	if stats.Decoded != 13 {
+		t.Errorf("decoded = %d, want 13", stats.Decoded)
 	}
-	want := map[string]int{"custom-title": 1, "future-record-type": 1}
+	want := map[string]int{"future-record-type": 1}
 	if len(stats.SkippedTypes) != len(want) {
 		t.Fatalf("skipped types = %v, want %v", stats.SkippedTypes, want)
 	}
@@ -287,8 +302,11 @@ func TestReaderSkipsUnknownTypesWithoutFailing(t *testing.T) {
 			t.Errorf("skipped[%q] = %d, want %d", k, stats.SkippedTypes[k], v)
 		}
 	}
-	if stats.Skipped != 2 {
-		t.Errorf("skipped = %d, want 2", stats.Skipped)
+	if stats.Skipped != 1 {
+		t.Errorf("skipped = %d, want 1", stats.Skipped)
+	}
+	if stats.Decoded+stats.Skipped+stats.Blank+stats.Malformed != stats.Lines {
+		t.Errorf("stats don't account for every line: %+v", stats)
 	}
 	if stats.Malformed != 0 {
 		t.Errorf("malformed = %d, want 0", stats.Malformed)

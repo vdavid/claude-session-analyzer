@@ -15,6 +15,12 @@ const (
 	TypeAttachment     RecordType = "attachment"
 	TypeSystem         RecordType = "system"
 	TypeQueueOperation RecordType = "queue-operation"
+
+	// The three title types below carry no timestamp and get rewritten on most turns, so the last one in a file wins.
+	// A custom title is what a person set; an AI title and an agent name are generated.
+	TypeCustomTitle RecordType = "custom-title"
+	TypeAITitle     RecordType = "ai-title"
+	TypeAgentName   RecordType = "agent-name"
 )
 
 // BlockType is a content block's kind inside an assistant or user message.
@@ -62,6 +68,9 @@ type Record struct {
 	Prompt string
 	// Usage carries token counts on an assistant record. Blocks before the last of a request hold partial counts.
 	Usage *Usage
+
+	// Title is the text of a custom-title, ai-title, or agent-name record.
+	Title string
 
 	// Attachment is an attachment record's `attachment.type`.
 	Attachment string

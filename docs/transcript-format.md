@@ -126,6 +126,13 @@ them.
 `subtype` of `turn_duration` (with `durationMs` and `messageCount`), `away_summary` (with `content`, the recap text),
 `stop_hook_summary`, `compact_boundary`, `local_command`.
 
+### Titles
+
+Three types carry a session's title, none of them timestamped, all of them rewritten on most turns, so the last of
+each in a file wins: `custom-title` (`customTitle`, what a person set), `ai-title` (`aiTitle`, generated), and
+`agent-name` (`agentName`, also generated). A session list should prefer them in that order. The reference session
+rewrites each of them 109 times, so reading the tail of a file is enough to find them.
+
 ### `queue-operation`
 
 `operation` is `enqueue` (with `content`, the user's queued text) or `dequeue`. This is how you spot a prompt that

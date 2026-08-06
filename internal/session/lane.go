@@ -1,0 +1,79 @@
+package session
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/vdavid/claude-session-analyzer/internal/transcript"
+)
+
+// Lane is one agent's transcript: the lead, or one subagent. A session's time is spent inside lanes, and they run
+// concurrently, so the timeline is built per lane and merged afterwards.
+type Lane struct {
+	// ID is the session id for the lead, and the agent id for a subagent. An agent id is the transcript file's base
+	// name minus its `agent-` prefix, which is also what the records inside carry as `agentId`.
+	ID string
+	// Name is what to label the lane: the metadata's name, its agent type, or the agent id, whichever comes first.
+	Name   string
+	IsLead bool
+	Path   string
+	Meta   AgentMeta
+
+	// Records are every decoded record in the transcript, in file order.
+	Records []*transcript.Record
+	// Stats accounts for every line the reader saw, including the ones it skipped.
+	Stats transcript.Stats
+}
+
+// AgentMeta is a subagent's `.meta.json`. Every field is optional: older files carry only AgentType and Description,
+// and the file is missing entirely for plenty of lanes.
+type AgentMeta struct {
+	// Present says a `.meta.json` was there to read.
+	Present     bool
+	AgentType   string `json:"agentType"`
+	Description string `json:"description"`
+	Name        string `json:"name"`
+	Model       string `json:"model"`
+	Color       string `json:"color"`
+	SpawnDepth  int    `json:"spawnDepth"`
+	TaskKind    string `json:"taskKind"`
+	TeamName    string `json:"teamName"`
+}
+
+// agentIDFromPath turns `.../subagents/agent-am1-engine-aeeff1f0.jsonl` into `am1-engine-aeeff1f0`. The remainder
+// can't be split into a name and a hash, because names contain dashes too, so don't try: the label comes from the
+// metadata.
+func agentIDFromPath(path string) string {
+	return strings.TrimPrefix(strings.TrimSuffix(filepath.Base(path), ".jsonl"), "agent-")
+}
+
+// readAgentMeta reads the `.meta.json` sitting next to a subagent transcript. A missing, unreadable, or undecodable
+// one isn't an error: plenty of lanes have none, and a lane without metadata still has all its records. It costs a
+// label, nothing more.
+func readAgentMeta(transcriptPath string) AgentMeta {
+	path := strings.TrimSuffix(transcriptPath, ".jsonl") + ".meta.json"
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return AgentMeta{}
+	}
+	var meta AgentMeta
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return AgentMeta{}
+	}
+	meta.Present = true
+	return meta
+}
+
+// laneName picks the best label available.
+func laneName(meta AgentMeta, agentID string) string {
+	switch {
+	case meta.Name != "":
+		return meta.Name
+	case meta.AgentType != "":
+		return meta.AgentType
+	default:
+		return agentID
+	}
+}

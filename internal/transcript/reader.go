@@ -169,7 +169,8 @@ func trimSpace(b []byte) []byte {
 
 func isDecodedType(t string) bool {
 	switch RecordType(t) {
-	case TypeAssistant, TypeUser, TypeAttachment, TypeSystem, TypeQueueOperation:
+	case TypeAssistant, TypeUser, TypeAttachment, TypeSystem, TypeQueueOperation,
+		TypeCustomTitle, TypeAITitle, TypeAgentName:
 		return true
 	}
 	return false
@@ -210,6 +211,10 @@ type wireRecord struct {
 	} `json:"compactMetadata"`
 
 	Operation string `json:"operation"`
+
+	CustomTitle string `json:"customTitle"`
+	AITitle     string `json:"aiTitle"`
+	AgentName   string `json:"agentName"`
 }
 
 type wireMessage struct {
@@ -297,6 +302,12 @@ func (w wireRecord) toRecord(line, maxValue int) *Record {
 			Operation: w.Operation,
 			Content:   truncate(asString(w.Content), maxValue),
 		}
+	case TypeCustomTitle:
+		rec.Title = w.CustomTitle
+	case TypeAITitle:
+		rec.Title = w.AITitle
+	case TypeAgentName:
+		rec.Title = w.AgentName
 	}
 
 	return rec
