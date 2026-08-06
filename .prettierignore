@@ -1,0 +1,7 @@
+node_modules
+pnpm-lock.yaml
+web/build
+web/.svelte-kit
+
+# Fixtures are shaped like the transcripts they stand in for, so they're left exactly as captured.
+**/testdata/

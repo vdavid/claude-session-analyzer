@@ -20,9 +20,9 @@ no gaps and no negative durations (verified 2026-08-06, `TestRealTimelineSweep`)
 
 ## The activity kinds
 
-- **thinking**: a `thinking` block. The span starts when the previous block finished streaming, so it includes API
-  queue time and prompt processing, not only reasoning. On a 670k-token context that isn't noise, and it's why the
-  legend has to say so rather than calling this "reasoning".
+- **thinking**: a `thinking` block. The span starts when the previous block finished streaming, so it includes API queue
+  time and prompt processing, not only reasoning. On a 670k-token context that isn't noise, and it's why the legend has
+  to say so rather than calling this "reasoning".
 - **writing**: a `text` block, the agent composing prose for its caller.
 - **tool call**: composing the call, from the previous block until the `tool_use` block finished streaming. When no
   thinking block came first, this span carries the whole response latency, the same caveat `thinking` has.
@@ -32,8 +32,8 @@ no gaps and no negative durations (verified 2026-08-06, `TestRealTimelineSweep`)
   agent asked.
 - **waiting for a teammate**: another agent's message closed the gap.
 - **waiting for a background task**: a background task's notification closed the gap.
-- **waiting, reason unknown**: the lane went quiet and later produced something, with no input, message, or
-  notification between the two.
+- **waiting, reason unknown**: the lane went quiet and later produced something, with no input, message, or notification
+  between the two.
 - **API error**: the API didn't answer the request. The span is the harness retrying, which is time the session lost
   through no fault of the agent.
 - **stalled**: a result that arrived far too late for what the call was doing. The agent was suspended, not working.
@@ -50,8 +50,8 @@ And `API error`, for the reason below.
 ### Why waiting is four kinds and not one
 
 One bucket answers nothing. The reference session's lead sat idle for 71h24m, and "71 hours of waiting" is not a
-finding: the split is, because it says the session was blocked on its human far more than on its agents. Naming them
-for what was waited on rather than for who waited keeps a subagent's four minutes of waiting in the same buckets as the
+finding: the split is, because it says the session was blocked on its human far more than on its agents. Naming them for
+what was waited on rather than for who waited keeps a subagent's four minutes of waiting in the same buckets as the
 lead's 71 hours.
 
 ## The cursor, and why timestamps can't be trusted
@@ -73,8 +73,8 @@ which is the thinking block, and that's where the time went. The rest are zero-l
 
 ### Records that aren't work don't cost time
 
-An attachment, a hook's output, a turn summary: they carry timestamps but they aren't the lane doing something, so
-their stretch belongs to whichever row surrounds them. Same for a block type nothing decodes, such as `fallback`.
+An attachment, a hook's output, a turn summary: they carry timestamps but they aren't the lane doing something, so their
+stretch belongs to whichever row surrounds them. Same for a block type nothing decodes, such as `fallback`.
 
 ### Telling an idle lane from a thinking one
 
@@ -106,9 +106,9 @@ The harness writes a failed request as an ordinary assistant record with a text 
 read as a long silence it trips the 15-minute backstop above and becomes idle time. Either way an outage quietly lands
 in a number that means something else, which is why it gets a kind.
 
-`API error` covers everything the API refused, not only an outage: a rate limit, an expired login, a prompt too long,
-a model that doesn't exist. Naming the kind "outage" would be wrong for half of them, and the row's info carries the
-typed reason and the status, so the specific failure is right there.
+`API error` covers everything the API refused, not only an outage: a rate limit, an expired login, a prompt too long, a
+model that doesn't exist. Naming the kind "outage" would be wrong for half of them, and the row's info carries the typed
+reason and the status, so the specific failure is right there.
 
 The span is the stretch before the record, because the retries aren't written down: no transcript in the corpus holds
 two error records in a row, so the gap before one is the only measure of the outage there is. Two clamps keep that
@@ -117,8 +117,8 @@ honest, and both leave a wait behind rather than swallowing time they can't acco
 - A lane whose turn had already ended had no request in flight, so the stretch before the error stays a wait and the
   error marks the moment without claiming any of it.
 - The retry window can't run longer than `DefaultMaxAPIErrorSpan`, which is two hours against a corpus whose longest
-  such gap is 1h19m. The case it guards has no evidence and every reason to expect: a session resumed weeks later,
-  whose first request fails on a login that expired while it sat there.
+  such gap is 1h19m. The case it guards has no evidence and every reason to expect: a session resumed weeks later, whose
+  first request fails on a login that expired while it sat there.
 
 A lane is idle after a failed request, because the agent can't carry on by itself. Whatever comes next was started by
 something else, and an unexplained gap after one says so.
@@ -163,17 +163,17 @@ the row borrows from what the agent did next, always starting with "before", so 
 ### A wait is attributed by the record that ended it
 
 The record that arrived is the signal: a teammate's message (read from the harness's envelope, which carries the
-sender's id), a background task's notification, or a person's prompt. So a notification landing while four teammates
-are alive is a background task's wait, not theirs, and a wait nothing arrived to end is `waiting, reason unknown`
-rather than a guess.
+sender's id), a background task's notification, or a person's prompt. So a notification landing while four teammates are
+alive is a background task's wait, not theirs, and a wait nothing arrived to end is `waiting, reason unknown` rather
+than a guess.
 
 That leaves no ambiguity to resolve: across the corpus's 12,437 envelope-carrying records, not one carries both
-envelopes (verified 2026-08-06). A notification arrives as a plain prompt about a third of the time (2,044 against
-6,288 queued), so both paths are read the same way.
+envelopes (verified 2026-08-06). A notification arrives as a plain prompt about a third of the time (2,044 against 6,288
+queued), so both paths are read the same way.
 
-The envelope is only looked for in the first 200 characters, which is the message's own wrapper rather than something
-it quotes. Three enqueued messages in the corpus carry a notification past that point and are read as a person's
-prompt, which is the deliberate side of that trade.
+The envelope is only looked for in the first 200 characters, which is the message's own wrapper rather than something it
+quotes. Three enqueued messages in the corpus carry a notification past that point and are read as a person's prompt,
+which is the deliberate side of that trade.
 
 Lead waits also list the teammates alive at the time, which is the difference between "blocked on four agents" and
 "blocked on nobody". It's a sweep over lanes sorted by start with a heap of the ones still running, because one session
@@ -184,8 +184,7 @@ in the corpus has 977 workflow lanes and a scan per row would not do.
 - It can't say when a suspended agent woke up, only that the result arrived late. The same goes for a lane that resumes
   with no input on record: the row before it is idle, and the block that ended it claims no time.
 - It can't split a multi-block record's span across its blocks, because there's only one timestamp.
-- A thinking span includes model latency and always will, and so does a tool call span with no thinking block before
-  it.
+- A thinking span includes model latency and always will, and so does a tool call span with no thinking block before it.
 - A tool execution span includes anything the tool waited on, including a person answering a permission prompt. Nothing
   in the transcript separates the two.
 - Two lanes can carry the same name, because a lane with no `.meta.json` falls back to its agent type. Group by

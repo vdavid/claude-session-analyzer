@@ -4,8 +4,8 @@ Status: M1 through M5 done. M6 is the wiring and publishing pass.
 
 ## What we're building
 
-A tool that reads Claude Code session transcripts off disk and reconstructs **where the time went**: per agent, second by
-second, from the first prompt to the last tool result.
+A tool that reads Claude Code session transcripts off disk and reconstructs **where the time went**: per agent, second
+by second, from the first prompt to the last tool result.
 
 The question that started it: a large multi-agent effort took three days of wall clock. Which parts were thinking, which
 were tool execution, which were the lead sitting idle waiting on a teammate, and which were neither (a suspended agent,
@@ -45,9 +45,9 @@ skipped without failing; new ones get added over time.
 
 The types that matter:
 
-- `assistant`: one record **per content block**, not per message. A single API response becomes a `thinking` record, then
-  a `text` record, then a `tool_use` record, each separately stamped. `requestId` groups them; `message.usage` carries
-  token counts (on the final block of the request, earlier blocks hold partial counts).
+- `assistant`: one record **per content block**, not per message. A single API response becomes a `thinking` record,
+  then a `text` record, then a `tool_use` record, each separately stamped. `requestId` groups them; `message.usage`
+  carries token counts (on the final block of the request, earlier blocks hold partial counts).
 - `user`: either a real prompt (`message.content` is a string) or a tool result (`message.content` is an array holding a
   `tool_result` block, with `toolUseResult` alongside carrying the structured payload).
 - `attachment`: hook output, task reminders, memory injections, file edits. Carries `attachment.type`. Not agent work;
@@ -73,11 +73,11 @@ The types that matter:
 
 Both found in the verified session, both invisible without this tool:
 
-- **Timed-out waits.** Repeated 600.0s tool results from blocking shell loops (`until pgrep …; do sleep 3; done`) hitting
-  the 10-minute Bash cap. The agent was neither thinking nor working.
-- **Suspension.** A trivial `rm` plus `du -sh` whose result arrived **6h20m** after it was issued. The agent was stalled,
-  not busy. Reporting that as a six-hour `rm` would be a lie, and it is exactly the event that made the lead believe a
-  teammate had died.
+- **Timed-out waits.** Repeated 600.0s tool results from blocking shell loops (`until pgrep …; do sleep 3; done`)
+  hitting the 10-minute Bash cap. The agent was neither thinking nor working.
+- **Suspension.** A trivial `rm` plus `du -sh` whose result arrived **6h20m** after it was issued. The agent was
+  stalled, not busy. Reporting that as a six-hour `rm` would be a lie, and it is exactly the event that made the lead
+  believe a teammate had died.
 
 ## Decisions
 
@@ -89,12 +89,12 @@ Both found in the verified session, both invisible without this tool:
 3. **One row per content block**, not per message. David asked for the fine grain explicitly. Expect ~15k rows for the
    verified session, which the data sheet must handle without choking.
 4. **Six activity kinds**, and the naming is load-bearing:
-   - `thinking` (includes model latency, say so in the docs and in the UI legend)
-   - `writing` (a `text` block: the agent composing prose for its caller)
-   - `tool call` (composing the call: previous block to the `tool_use` block)
-   - `tool execution` (`tool_use` to `tool_result`, the honest wall clock of the tool)
-   - `waiting` (an idle gap; the lead waiting on a teammate or on David)
-   - `stalled` (a tool result that arrived absurdly late: the agent was suspended, not working)
+    - `thinking` (includes model latency, say so in the docs and in the UI legend)
+    - `writing` (a `text` block: the agent composing prose for its caller)
+    - `tool call` (composing the call: previous block to the `tool_use` block)
+    - `tool execution` (`tool_use` to `tool_result`, the honest wall clock of the tool)
+    - `waiting` (an idle gap; the lead waiting on a teammate or on David)
+    - `stalled` (a tool result that arrived absurdly late: the agent was suspended, not working)
 5. **Parallel tool calls stay separate rows and are allowed to overlap.** David asked for strictly sequential lanes, and
    in practice they are, but silently merging concurrent calls would hide real concurrency. Emit each, and flag the
    overlap in `Extra info` so a reader knows the lane briefly forked.
@@ -188,10 +188,9 @@ can be scrubbed. Data sheet with **TanStack Table** for sorting and filtering. D
 Verify the latest versions of every dependency on npm before pinning (never from memory), and respect the three-day
 release-age window. Run `pnpm dedupe` after installing.
 
-Design bar: this should look considered, not bootstrapped. Dark and light both real, respecting
-`prefers-color-scheme`. Sentence case everywhere. Colour the swimlane lanes from each agent's recorded `color` so the
-chart matches the terminal. David will ask for more charts later, so keep the chart components separable rather than one
-god component.
+Design bar: this should look considered, not bootstrapped. Dark and light both real, respecting `prefers-color-scheme`.
+Sentence case everywhere. Colour the swimlane lanes from each agent's recorded `color` so the chart matches the
+terminal. David will ask for more charts later, so keep the chart components separable rather than one god component.
 
 ### M6: Wiring, checks, docs, and publish
 
@@ -219,19 +218,19 @@ Four things the plan above got wrong or missed, all now corrected in `docs/trans
 trust from here:
 
 1. **Workflow subagents are lanes and the plan doesn't mention them.** They live one level deeper, at
-   `subagents/workflows/wf_<id>/agent-*.jsonl`. One session in the corpus has 977 of them. M5 needs a plan for
-   drawing a session with a thousand lanes.
+   `subagents/workflows/wf_<id>/agent-*.jsonl`. One session in the corpus has 977 of them. M5 needs a plan for drawing a
+   session with a thousand lanes.
 2. **"One record per content block" is version-dependent.** Newer transcripts split them, older ones pack up to 13
    blocks into one record, including 11 parallel `tool_use` calls. Decision 5 (parallel calls stay separate rows) is
    therefore load-bearing, not theoretical.
-3. **`thinking.thinking` is not always empty.** It's empty in 5,469 of 5,471 sampled blocks, but two on `2.1.177`
-   carry real reasoning. Decision 7 should use the text when it's there and fall back to inference otherwise.
+3. **`thinking.thinking` is not always empty.** It's empty in 5,469 of 5,471 sampled blocks, but two on `2.1.177` carry
+   real reasoning. Decision 7 should use the text when it's there and fall back to inference otherwise.
 4. **Timestamps go backwards.** 186 of 15,831 records in the reference session, mostly sub-millisecond jitter, but
    compaction produces a real 132 s backward jump. M2 must clamp negative spans and read compaction time from
    `compactMetadata.durationMs`.
 
-Also worth knowing for M2: subagent `.meta.json` is often missing or partial, so `Lane.Name` already falls back
-through `name` → `agentType` → agent id, and `Meta.Color` is empty often enough that the UI needs its own palette.
+Also worth knowing for M2: subagent `.meta.json` is often missing or partial, so `Lane.Name` already falls back through
+`name` → `agentType` → agent id, and `Meta.Color` is empty often enough that the UI needs its own palette.
 
 **M2 done.** `internal/timeline` turns lanes into rows. Rules and their evidence: `docs/timeline-rules.md`. Verified by
 deriving all 720 sessions on this machine (3,879 lanes, 776k rows), which is where three real bugs turned up.
@@ -244,20 +243,20 @@ What the plan got wrong or missed here:
    took hours to answer, which is `waiting`, not a suspended agent. Tools that block on a human are their own class.
 3. **Idle time is much harder to spot than the plan assumes.** Decision 8 talks about what ends a wait, but the harder
    half is noticing the lane went idle at all: a lane that sits silent and then produces a block reports the whole
-   stretch as thinking. Three signals in order of trust (a turn-end record, input arriving, and a span too long to be
-   a response) now cover it. Before them the corpus held a 596-hour `writing` row and a 7h23m `thinking` row.
-4. **Queued input is half the story.** 41 of the reference session's 78 long idle gaps end at a `queue-operation:
-   enqueue` rather than at a prompt, and the queue has four operations, not two.
+   stretch as thinking. Three signals in order of trust (a turn-end record, input arriving, and a span too long to be a
+   response) now cover it. Before them the corpus held a 596-hour `writing` row and a 7h23m `thinking` row.
+4. **Queued input is half the story.** 41 of the reference session's 78 long idle gaps end at a
+   `queue-operation: enqueue` rather than at a prompt, and the queue has four operations, not two.
 5. **The golden file is a hand-built fixture, not a trimmed real session.** The repo is public and the transcripts on
    this machine aren't. The fixture is modelled on the real shapes and covers more cases than a trim would; the
    reference-session checks that run against actual data are env-gated (`RealTimeline`, `RealAnomalies`,
    `RealTimelineSweep`).
 
 For M3 and M4: `Columns()` and `Row.Fields()` hold the CSV contract, `Timeline.Records()` renders the whole thing, and
-`Timeline.TotalsByKind()` sums the durations. Rows carry `LaneID`, `Tool`, `Class`, `Overlapped`, `TimedOut`,
-`IsError`, and the transcript `Line`, so an API can expose more than the six CSV columns. Group by `LaneID`, not by
-`Agent`: two lanes can share a name when neither has a `.meta.json`. Parallel tool executions overlap on purpose, so
-per-kind totals can exceed a session's wall clock, which is the honest answer rather than a rounded one.
+`Timeline.TotalsByKind()` sums the durations. Rows carry `LaneID`, `Tool`, `Class`, `Overlapped`, `TimedOut`, `IsError`,
+and the transcript `Line`, so an API can expose more than the six CSV columns. Group by `LaneID`, not by `Agent`: two
+lanes can share a name when neither has a `.meta.json`. Parallel tool executions overlap on purpose, so per-kind totals
+can exceed a session's wall clock, which is the honest answer rather than a rounded one.
 
 **M3 and M4 done**, together: both are thin surfaces over the same engine, and splitting them would have cost more in
 handoff than it saved. `internal/cli` holds the three subcommands, `internal/api` the handlers and JSON shapes
@@ -267,8 +266,8 @@ Numbers, measured on this machine (2026-08-06, 722 sessions, 3,258 subagent lane
 
 - `sessions` over the whole corpus: 0.25 s end to end, of which the listing itself is 150 ms.
 - `timeline` on the reference session (28 lanes): 0.9 s, 15,944 rows. On the 983-lane session: 1.7 s, 21,964 rows.
-- `/api/sessions`: 273 KB in 140 ms. The reference session's timeline: 5.5 MB in 0.7 s, or 40 KB with `?rows=false`.
-  The 983-lane one: 7.7 MB in 1.6 s, or 364 KB without rows.
+- `/api/sessions`: 273 KB in 140 ms. The reference session's timeline: 5.5 MB in 0.7 s, or 40 KB with `?rows=false`. The
+  983-lane one: 7.7 MB in 1.6 s, or 364 KB without rows.
 
 What the plan got wrong or missed here:
 
@@ -280,9 +279,8 @@ What the plan got wrong or missed here:
    lane, the lead included. They're now `subagents` and `totals.lanes`, one apart on purpose.
 3. **A subagent can outlive the lead**, by 20 minutes on the reference session. So a session's `start` and `end` (the
    lead's) and a timeline's `totals.from` and `totals.until` (every lane's) are separate fields rather than one.
-4. **The 983-lane session is fine, but its rows aren't.** 7.7 MB of JSON for one page, against 364 KB for the
-   aggregates alone, so the timeline endpoint takes `?rows=false`. M5 should fetch the aggregates first and the sheet
-   on demand.
+4. **The 983-lane session is fine, but its rows aren't.** 7.7 MB of JSON for one page, against 364 KB for the aggregates
+   alone, so the timeline endpoint takes `?rows=false`. M5 should fetch the aggregates first and the sheet on demand.
 5. **CORS is load-bearing and the plan doesn't mention it.** The dev frontend on 19428 is a different origin from the
    API on 19427, so without an allowlist the browser blocks every call. It names the frontend's two origins and nothing
    else; a wildcard would let any page in the browser read the transcripts.
@@ -310,8 +308,8 @@ What this turned up:
    under the original project slug while its `<session-id>/subagents/` directory is written under the worktree's slug,
    and `session.Find` only read the directory sitting next to the lead. Fixed, below.
 
-**Worktree lanes are found now.** Discovery ties a directory to a session by the directory's **name** rather than by
-the slug around it, and a lane is its path inside a session directory rather than the file it sits in. Layout facts and
+**Worktree lanes are found now.** Discovery ties a directory to a session by the directory's **name** rather than by the
+slug around it, and a lane is its path inside a session directory rather than the file it sits in. Layout facts and
 their evidence: `docs/transcript-format.md`.
 
 What this turned up:
@@ -325,8 +323,8 @@ What this turned up:
    `Load` merges them with a k-way merge that leaves each fragment's own order alone, which reproduces the `parentUuid`
    chain exactly on all seven. Reading them as separate lanes would also have handed the UI two lanes carrying one
    `laneId`, which is the key `docs/api.md` tells it to group by.
-3. **The corpus grew by more than the lane count suggests.** 3,890 lanes became 4,333 (452 files, less the nine that
-   are fragments of a lane already found), and 781,246 rows became 857,731. Four more `API error` rows turned up in the
+3. **The corpus grew by more than the lane count suggests.** 3,890 lanes became 4,333 (452 files, less the nine that are
+   fragments of a lane already found), and 781,246 rows became 857,731. Four more `API error` rows turned up in the
    blind spot, 241 to 245. All 724 sessions still tile, and all 444 lanes found under another slug sit inside their
    lead's lifetime: not one starts before it or ends after it.
 4. **`TestRealTimeline`'s "working" column summed by name.** Lanes sharing a name (23 of them called `general-purpose`
@@ -345,14 +343,14 @@ session and 2.5 s on the largest; the sheet's own fetch lands a couple of second
 What the plan got wrong or missed here:
 
 1. **The API broke its own contract on a session with no timestamps.** `totals.from` and `totals.until` were plain
-   `time.Time`, so 99 of the 725 sessions on this machine answered `0001-01-01T00:00:00Z` where `docs/api.md` says
-   null, and the page rendered "1-01-01 00:53". They're `*time.Time` now, with
-   `TestATimelineWithNoTimestampsAnswersNullRatherThanYearOne` holding it. `parseInstant` in the frontend also floors
-   at 2024, so a zero date growing back upstream can't reach a reader.
-2. **A thousand lanes needed three answers, not one.** Collapsing workflows to a row each gets 983 lanes down to 18,
-   but an opened workflow is still 848 rows and a canvas that tall isn't a thing to ask a browser for. So rows also
-   scroll through a fixed window rather than shrinking, and an opened group is capped at 150 and says how many it held
-   back. The third answer is labelling: 848 lanes all named `workflow-subagent` are told apart by id prefix.
+   `time.Time`, so 99 of the 725 sessions on this machine answered `0001-01-01T00:00:00Z` where `docs/api.md` says null,
+   and the page rendered "1-01-01 00:53". They're `*time.Time` now, with
+   `TestATimelineWithNoTimestampsAnswersNullRatherThanYearOne` holding it. `parseInstant` in the frontend also floors at
+   2024, so a zero date growing back upstream can't reach a reader.
+2. **A thousand lanes needed three answers, not one.** Collapsing workflows to a row each gets 983 lanes down to 18, but
+   an opened workflow is still 848 rows and a canvas that tall isn't a thing to ask a browser for. So rows also scroll
+   through a fixed window rather than shrinking, and an opened group is capped at 150 and says how many it held back.
+   The third answer is labelling: 848 lanes all named `workflow-subagent` are told apart by id prefix.
 3. **`GraphicComponent` and a fourth chart didn't earn their place.** The donut's centre label is HTML over the canvas,
    which is crisper and one less ECharts component. A corpus histogram on the front page was built up to and then cut:
    the hero carries the corpus totals instead, which is the same information without a chart nobody asked for.

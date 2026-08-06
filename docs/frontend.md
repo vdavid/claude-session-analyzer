@@ -14,9 +14,9 @@ time, stall detection is a heuristic, and a thinking row's subject is borrowed f
 
 **`/session/[id]`** analyses one session on load, in four stacked sections:
 
-1. **The trace.** A stepped area strip under the header showing how many agents were producing at once across the
-   span, with the peak called out. It's the shape of the session in one line: where the parallel waves were, and how
-   much of the span had nobody working.
+1. **The trace.** A stepped area strip under the header showing how many agents were producing at once across the span,
+   with the peak called out. It's the shape of the session in one line: where the parallel waves were, and how much of
+   the span had nobody working.
 2. **The stat rail.** Elapsed, lane time, lanes, rows, each with its caveat printed under it rather than hidden in a
    tooltip. A number whose caveat lives elsewhere gets read wrong.
 3. **Where lane time went.** A band bar (working / waiting / lost / compacting), then the donut with its legend as a
@@ -36,9 +36,8 @@ from another page in the browser, which is the case it exists for.
 ### Aggregates first, rows second
 
 The session page fetches `?rows=false` (364 KB on the largest session), renders the charts off it, and only then asks
-for the rows (7.7 MB). Asking for both at once would have the server parsing the same transcript twice at the same
-time, which delays the thing the reader is waiting for. The sheet section says how many rows it's fetching while it
-waits.
+for the rows (7.7 MB). Asking for both at once would have the server parsing the same transcript twice at the same time,
+which delays the thing the reader is waiting for. The sheet section says how many rows it's fetching while it waits.
 
 ### Colour belongs to data
 
@@ -67,21 +66,21 @@ looks right offline, which a local tool should.
 
 Sections slide 6px into place, staggered, so the page assembles rather than blinking. They don't fade in, because a
 browser composites text at partial opacity against the canvas behind it: faint ink at 40% alpha measures around 2:1
-against paper, so a fade puts every word on the page under AA for as long as it runs. Someone reading during those
-420 ms is the person the contrast ratio is for. Transform costs nothing in contrast and reads the same. It's off
-entirely under `prefers-reduced-motion`.
+against paper, so a fade puts every word on the page under AA for as long as it runs, and someone reading during that
+first half-second is the person the contrast ratio is for. Transform costs nothing in contrast and reads the same. It's
+off entirely under `prefers-reduced-motion`.
 
 ### A thousand lanes
 
 The largest session on this machine has 983 lanes, 977 of them spawned by 12 workflows and every one of those named
 `workflow-subagent`. Three things together make it readable:
 
-- **Workflows collapse.** One row per workflow, its bar the union of its members'. 983 lanes become 18 rows. A hole in
-  a workflow row means every lane in it was quiet, which is worth seeing on its own.
+- **Workflows collapse.** One row per workflow, its bar the union of its members'. 983 lanes become 18 rows. A hole in a
+  workflow row means every lane in it was quiet, which is worth seeing on its own.
 - **Rows scroll rather than shrink.** The chart draws a fixed window of full-height rows (`MAX_VISIBLE_ROWS`) and moves
   a y-axis slider over the rest. A canvas 983 rows tall is not a thing a browser should be asked for.
-- **An opened workflow is capped** at 150 lanes and says how many it held back, and its lanes are labelled by id
-  prefix because their names are all the same.
+- **An opened workflow is capped** at 150 lanes and says how many it held back, and its lanes are labelled by id prefix
+  because their names are all the same.
 
 ### Sub-pixel segments are left alone
 
@@ -99,12 +98,12 @@ subtleties in it. The search box is debounced by 180 ms so a keystroke doesn't r
 
 ## Dependency notes
 
-- **`@tanstack/table-core` 8, not 9.** The Svelte adapter only exists for v9, which was two days old when this was
-  built and therefore inside the three-day release-age window. The core is framework-agnostic and wiring it to runes is
-  a few lines, which is what shadcn-svelte does regardless. When v9 clears the window, `@tanstack/svelte-table` is the
+- **`@tanstack/table-core` 8, not 9.** The Svelte adapter only exists for v9, which was two days old when this was built
+  and therefore inside the three-day release-age window. The core is framework-agnostic and wiring it to runes is a few
+  lines, which is what shadcn-svelte does regardless. When v9 clears the window, `@tanstack/svelte-table` is the
   upgrade.
 - **`@tanstack/virtual-core` rather than `@tanstack/svelte-virtual`.** The Svelte adapter wraps the core in stores;
   runes read the core directly in about fifteen lines.
-- **`minimumReleaseAge` lives in `pnpm-workspace.yaml`**, not `.npmrc`. That's where pnpm 11 reads its settings, and
-  npm rejects the key with a warning on every command.
+- **`minimumReleaseAge` lives in `pnpm-workspace.yaml`**, not `.npmrc`. That's where pnpm 11 reads its settings, and npm
+  rejects the key with a warning on every command.
 - **TypeScript 6, not 7.** `typescript-eslint` caps its peer at `<6.1.0`.

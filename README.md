@@ -42,10 +42,10 @@ and 3.5 GB in a quarter of a second, because it reads the two ends of each trans
 
 One row per stretch of one agent's wall clock, in six columns: `From`, `Until`, `Agent`, `Activity`, `Extra info`, and
 `Duration (s)`. `Activity` is one of thinking, writing, tool call, tool execution, waiting for a person, waiting for a
-teammate, waiting for a background task, waiting with the reason unknown, API error, stalled, or compacting. Waiting is four
-values rather than one because "71 hours of waiting" answers nothing, while knowing that 41 of those hours were on a
-person does. Within an agent the rows tile: each starts where the last ended, so nothing is unaccounted for and nothing
-is counted twice. What each activity means, and every judgement call behind it, is in `docs/timeline-rules.md`.
+teammate, waiting for a background task, waiting with the reason unknown, API error, stalled, or compacting. Waiting is
+four values rather than one because "71 hours of waiting" answers nothing, while knowing that 41 of those hours were on
+a person does. Within an agent the rows tile: each starts where the last ended, so nothing is unaccounted for and
+nothing is counted twice. What each activity means, and every judgement call behind it, is in `docs/timeline-rules.md`.
 
 ## What the web app shows
 

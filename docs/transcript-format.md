@@ -13,25 +13,25 @@ Verification base: a 57 MB multi-agent session (`532ac591-b7c5-45ca-a764-f40f01a
   (the parser reads `$CLAUDE_CONFIG_DIR/projects` when that's set).
 - The slug is the project path with `/` and `.` replaced by `-`, which is lossy: `/tmp/a.b` and `/tmp/a/b` collide.
   Don't invert it. Read `cwd` off any record instead.
-- A session that spawned subagents also has a directory `<session-id>/`, next to the lead transcript or under
-  another slug (see below), holding:
+- A session that spawned subagents also has a directory `<session-id>/`, next to the lead transcript or under another
+  slug (see below), holding:
     - `subagents/agent-a<something>.jsonl`: one transcript per subagent lane.
     - `subagents/agent-a<something>.meta.json`: the lane's metadata. Often missing; see below.
     - `subagents/workflows/wf_<id>/agent-a<something>.jsonl`: the same thing for agents a workflow spawned, one level
       deeper, with their own `.meta.json` files. These are real lanes doing real work, and missing them costs a lot: one
-      session in the corpus holds 977 of them against five direct subagents. Agent transcripts live at exactly these
-      two depths, nowhere else (verified 2026-08-06 across all 3,708 of them).
+      session in the corpus holds 977 of them against five direct subagents. Agent transcripts live at exactly these two
+      depths, nowhere else (verified 2026-08-06 across all 3,708 of them).
     - `subagents/workflows/wf_<id>/journal.jsonl`: the workflow's own log, not a lane. Its records are `started` and
-      `result` (`agentId`, `key`, and for `result` the agent's final report text), none of them timestamped. Taking
-      only `agent-*.jsonl` leaves it out.
+      `result` (`agentId`, `key`, and for `result` the agent's final report text), none of them timestamped. Taking only
+      `agent-*.jsonl` leaves it out.
     - `workflows/wf_<id>.json` and `workflows/scripts/*.js`: workflow definitions and the scripts they run. Not
       transcripts.
     - `tool-results/*.txt`: offloaded large tool outputs. No record in the verified session references these files, so
       treat the directory as opaque and ignore it for timing (verified 2026-08-06 by scanning every record of the
       reference session for the string `tool-results/`).
 - Sibling `.jsonl.wakatime` files come from an unrelated tool. Ignore them.
-- Scale to design for: 4,438 transcripts, 3.8 GB, on one developer's machine after four months. Session listing must
-  not parse bodies.
+- Scale to design for: 4,438 transcripts, 3.8 GB, on one developer's machine after four months. Session listing must not
+  parse bodies.
 
 ### A session's lanes are not always next to its lead transcript
 
@@ -60,8 +60,8 @@ ways (verified 2026-08-06).
 The fragments share no records, and they **interleave in time**: one lane's middle fragment spans 19:54:32 to 20:03:52
 while a third runs 19:54:39 to 19:56:22 inside it. Merging them by timestamp reproduces the `parentUuid` chain exactly
 on all seven (one head, no record before its parent), while concatenating them in slug order breaks it on four. So a
-lane is its path inside a session directory (`subagents/agent-<id>.jsonl`), not the file it sits in: the same path
-under two slugs is one lane in two pieces, and reading it as two lanes hands back two lanes carrying one agent id.
+lane is its path inside a session directory (`subagents/agent-<id>.jsonl`), not the file it sits in: the same path under
+two slugs is one lane in two pieces, and reading it as two lanes hands back two lanes carrying one agent id.
 
 Exactly one fragment carries the `.meta.json`, and which one isn't predictable, so read the lane's metadata off
 whichever of its files has one (verified 2026-08-06 across all seven split lanes).
@@ -80,15 +80,24 @@ So: take the lane label from `.meta.json`, and fall back to the file's base name
 A 2026-08 file has everything:
 
 ```json
-{"agentType":"m1-engine","description":"Build the repo skeleton and the reader","name":"m1-engine","spawnDepth":0,
- "model":"claude-opus-5","taskKind":"in_process_teammate","teamName":"session-532ac591","color":"blue",
- "planModeRequired":false,"permissionMode":"bypassPermissions"}
+{
+    "agentType": "m1-engine",
+    "description": "Build the repo skeleton and the reader",
+    "name": "m1-engine",
+    "spawnDepth": 0,
+    "model": "claude-opus-5",
+    "taskKind": "in_process_teammate",
+    "teamName": "session-532ac591",
+    "color": "blue",
+    "planModeRequired": false,
+    "permissionMode": "bypassPermissions"
+}
 ```
 
 A 2026-04 file has two:
 
 ```json
-{"agentType":"general-purpose","description":"Build-time DB bundling"}
+{ "agentType": "general-purpose", "description": "Build-time DB bundling" }
 ```
 
 And the file is sometimes absent entirely, including in recent sessions (verified 2026-08-06: several 2026-06 and
@@ -97,10 +106,9 @@ back `name` → `agentType` → the file's agent id, and `color` may be empty, s
 
 ## Records
 
-One JSON object per line. Lines get long: 1.36 MB is the longest in the reference session, and 3.42 MB is the longest
-in the whole corpus (verified 2026-08-06), so a
-`bufio.Scanner` at its default 64 KB limit fails on real data. `internal/transcript` reads lines with a growing
-`bufio.Reader` loop instead, with no fixed ceiling.
+One JSON object per line. Lines get long: 1.36 MB is the longest in the reference session, and 3.42 MB is the longest in
+the whole corpus (verified 2026-08-06), so a `bufio.Scanner` at its default 64 KB limit fails on real data.
+`internal/transcript` reads lines with a growing `bufio.Reader` loop instead, with no fixed ceiling.
 
 Not every line is a message. Types seen across the corpus (verified 2026-08-06, 150 random transcripts):
 
@@ -111,16 +119,16 @@ Not every line is a message. Types seen across the corpus (verified 2026-08-06, 
 - User input queue: `queue-operation`.
 - Workflow journals only: `started`, `result`.
 
-That list is the complete set as of 2026-08-06, from parsing all 4,438 transcripts (1,221,828 lines, 0 malformed).
-New types appear over time (`ai-title`, `relocated`, and `pr-link` are all newer than `2.1.112`), so an unknown `type`
-must be skipped, never treated as an error. `internal/session`'s `TestRealCorpusSweep` re-runs that check on demand
-and lists what it skipped, which is how a new type gets noticed.
+That list is the complete set as of 2026-08-06, from parsing all 4,438 transcripts (1,221,828 lines, 0 malformed). New
+types appear over time (`ai-title`, `relocated`, and `pr-link` are all newer than `2.1.112`), so an unknown `type` must
+be skipped, never treated as an error. `internal/session`'s `TestRealCorpusSweep` re-runs that check on demand and lists
+what it skipped, which is how a new type gets noticed.
 
 ### Fields shared by message records
 
-`uuid`, `parentUuid` (the previous record in the lane, `null` at the head), `timestamp` (RFC 3339, UTC),
-`sessionId`, `cwd`, `gitBranch`, `version`, `isSidechain`, `userType`, `entrypoint`. Subagent records add `agentId`.
-`sessionId` on a subagent record is the **parent** session's id, so it can't distinguish lanes: use the file path.
+`uuid`, `parentUuid` (the previous record in the lane, `null` at the head), `timestamp` (RFC 3339, UTC), `sessionId`,
+`cwd`, `gitBranch`, `version`, `isSidechain`, `userType`, `entrypoint`. Subagent records add `agentId`. `sessionId` on a
+subagent record is the **parent** session's id, so it can't distinguish lanes: use the file path.
 
 Records that aren't messages often carry no `timestamp` at all (`custom-title`, `mode`, `permission-mode`,
 `bridge-session`, ...), so a zero timestamp is normal and must not be read as 1970.
@@ -130,10 +138,9 @@ Records that aren't messages often carry no `timestamp` at all (`custom-title`, 
 Carries `message` (the API response), `requestId` grouping the blocks of one response, and `message.usage` with token
 counts. Earlier blocks of a request hold partial usage; the final block holds the total.
 
-**`message.content` is an array, and it is usually but not always length 1.** In the reference session all 570
-assistant records hold exactly one block, but across 200 random transcripts 10 records of 32,655 hold more (up to 13
-blocks: one `thinking`, one `text`, and 11 parallel `tool_use` blocks, on `2.1.150` and `2.1.181`). Parse per block, not
-per record.
+**`message.content` is an array, and it is usually but not always length 1.** In the reference session all 570 assistant
+records hold exactly one block, but across 200 random transcripts 10 records of 32,655 hold more (up to 13 blocks: one
+`thinking`, one `text`, and 11 parallel `tool_use` blocks, on `2.1.150` and `2.1.181`). Parse per block, not per record.
 
 Block types: `thinking`, `text`, `tool_use`, and rarely `fallback`.
 
@@ -143,15 +150,16 @@ Block types: `thinking`, `text`, `tool_use`, and rarely `fallback`.
 - `text` is the agent's prose to its caller.
 - `tool_use` carries `id`, `name`, and `input` (tool-specific object). `caller` says `{"type":"direct"}` for a normal
   call. A `Bash` call's `input.timeout` is the limit it asked for, in milliseconds.
-- `fallback` marks the harness switching models mid-response: `{"type":"fallback","from":{"model":...},"to":{"model":
-  ...}}`. It carries no text and isn't the agent doing anything. Two blocks in 250 random transcripts (verified
-  2026-08-06). New block types will appear, so an unknown one has to be stepped over rather than treated as content.
+- `fallback` marks the harness switching models mid-response:
+  `{"type":"fallback","from":{"model":...},"to":{"model": ...}}`. It carries no text and isn't the agent doing anything.
+  Two blocks in 250 random transcripts (verified 2026-08-06). New block types will appear, so an unknown one has to be
+  stepped over rather than treated as content.
 
 ### An assistant record can be the API failing rather than the agent answering
 
 When a request doesn't come back, the harness writes what looks like an ordinary assistant record: one `text` block
-holding prose for the person at the terminal, `model: "<synthetic>"`, and zeros throughout `usage`. Three fields tell
-it apart, and only they should be read (the prose is copy and changes):
+holding prose for the person at the terminal, `model: "<synthetic>"`, and zeros throughout `usage`. Three fields tell it
+apart, and only they should be read (the prose is copy and changes):
 
 - `isApiErrorMessage: true`, always present on one.
 - `error`, a typed string. Across the corpus: `rate_limit` (70), `authentication_failed` (57), `server_error` (46),
@@ -162,10 +170,9 @@ it apart, and only they should be read (the prose is copy and changes):
 Six of the 245 also carry `errorDetails`, which nothing reads yet.
 
 Scale and spread (verified 2026-08-06, the 4,445 transcripts on this machine): 245 records in 185 of them, across 38
-harness versions
-from `2.1.138` to `2.1.221`, in lead and subagent lanes alike. They never come in runs: no transcript holds two in a
-row, so the retries a long outage costs are invisible and only the gap before the record measures them. That gap is
-under a minute for 191 of them, and its longest is 1h19m.
+harness versions from `2.1.138` to `2.1.221`, in lead and subagent lanes alike. They never come in runs: no transcript
+holds two in a row, so the retries a long outage costs are invisible and only the gap before the record measures them.
+That gap is under a minute for 191 of them, and its longest is 1h19m.
 
 `isApiErrorMessage: false` appears on ordinary assistant records too, so the flag's presence means nothing on its own.
 
@@ -195,9 +202,9 @@ A `Bash` call the harness cut short at its timeout arrives in one of two shapes,
 - The payload is a bare string, `"Error: Exit code 143\nCommand timed out after 10m 0s"`, with `is_error: true` on the
   result block. Nothing structured says what the limit was.
 
-The harness caps a `Bash` call at ten minutes whatever it asks for: four calls in the reference session requesting
-1,200 s to 3,600 s all came back at 600.1 s (verified 2026-08-06). That's the `BASH_MAX_TIMEOUT_MS` default and a
-deployment can raise it, so treat it as a ceiling on inference rather than a fact.
+The harness caps a `Bash` call at ten minutes whatever it asks for: four calls in the reference session requesting 1,200
+s to 3,600 s all came back at 600.1 s (verified 2026-08-06). That's the `BASH_MAX_TIMEOUT_MS` default and a deployment
+can raise it, so treat it as a ceiling on inference rather than a fact.
 
 ### The `Agent` tool's result links a spawn to the lane it created
 
@@ -210,14 +217,14 @@ A teammate spawn comes back with `status: "teammate_spawned"`, `agent_id` (`<nam
 The harness wraps input it relays in a tag of its own, which is structure rather than prose and can be parsed:
 
 - `<teammate-message teammate_id="m1-engine" color="green">…</teammate-message>` is a message from another agent. A
-  subagent gets it as the whole prompt; a lead gets one line of preamble first, `Another Claude session sent a
-  message:`.
+  subagent gets it as the whole prompt; a lead gets one line of preamble first,
+  `Another Claude session sent a message:`.
 - `<task-notification><task-id>…</task-id>…</task-notification>` is a background task reporting in. It arrives as
   `queue-operation` content rather than as a prompt.
 
-`isMeta: true` marks a harness-injected user record rather than something a person typed: the
-`<local-command-caveat>` preamble, or a `<system-reminder>` block. Three of 388 user records in the reference session.
-Timeline code should not count these as prompts.
+`isMeta: true` marks a harness-injected user record rather than something a person typed: the `<local-command-caveat>`
+preamble, or a `<system-reminder>` block. Three of 388 user records in the reference session. Timeline code should not
+count these as prompts.
 
 ### `attachment`
 
@@ -242,10 +249,10 @@ idle time can only be bounded by the prompts it receives.
 
 ### Titles
 
-Three types carry a session's title, none of them timestamped, all of them rewritten on most turns, so the last of
-each in a file wins: `custom-title` (`customTitle`, what a person set), `ai-title` (`aiTitle`, generated), and
-`agent-name` (`agentName`, also generated). A session list should prefer them in that order. The reference session
-rewrites each of them 109 times, so reading the tail of a file is enough to find them.
+Three types carry a session's title, none of them timestamped, all of them rewritten on most turns, so the last of each
+in a file wins: `custom-title` (`customTitle`, what a person set), `ai-title` (`aiTitle`, generated), and `agent-name`
+(`agentName`, also generated). A session list should prefer them in that order. The reference session rewrites each of
+them 109 times, so reading the tail of a file is enough to find them.
 
 ### `queue-operation`
 
@@ -269,15 +276,15 @@ arrived, not when the agent consumed it. In the reference session, 41 of the 78 
 186 of 15,831 records in the reference session are stamped earlier than the record before them in the same lane
 (verified 2026-08-06). Two distinct causes:
 
-- **Write jitter**, the common case: a median of 1 ms and a maximum of 121 ms, between records written by different
-  code paths in the same instant. Harmless, but it makes durations negative.
+- **Write jitter**, the common case: a median of 1 ms and a maximum of 121 ms, between records written by different code
+  paths in the same instant. Harmless, but it makes durations negative.
 - **Compaction**, the one that matters: a single 132.015 s backward jump. The compaction summary record is stamped when
-  compaction finished, while the records replayed after it are stamped when it started. The neighbouring
-  `system` / `compact_boundary` record confirms it, carrying `compactMetadata.durationMs: 132016` along with
-  `preTokens`, `postTokens`, and `trigger`.
+  compaction finished, while the records replayed after it are stamped when it started. The neighbouring `system` /
+  `compact_boundary` record confirms it, carrying `compactMetadata.durationMs: 132016` along with `preTokens`,
+  `postTokens`, and `trigger`.
 
-So: clamp negative spans to zero, and read compaction time off `compactMetadata.durationMs` rather than trying to
-derive it from the surrounding stamps.
+So: clamp negative spans to zero, and read compaction time off `compactMetadata.durationMs` rather than trying to derive
+it from the surrounding stamps.
 
 ### Session-level facts
 

@@ -13,11 +13,13 @@
         "check": "node scripts/check.js",
         "check:go": "node scripts/check.js go",
         "check:web": "node scripts/check.js web",
-        "format": "pnpm -C web format",
+        "format": "prettier --write .",
         "test": "pnpm -C web test"
     },
     "devDependencies": {
-        "concurrently": "10.0.4"
+        "concurrently": "10.0.4",
+        "prettier": "3.9.6",
+        "prettier-plugin-svelte": "4.1.1"
     },
     "engines": {
         "pnpm": ">=11"
