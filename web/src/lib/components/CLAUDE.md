@@ -24,4 +24,4 @@ two hand over.
 - `BandBar.svelte`: the eleven kinds rolled into working, waiting, lost, and compacting.
 - `StatRail.svelte`: numbers with their caveat under them rather than in a tooltip.
 - `Notice.svelte`: the empty and unreachable states. Never says "error" or "failed".
-- `charts/`: see its own `CLAUDE.md`.
+- `charts/`: see `web/src/lib/components/charts/CLAUDE.md`.

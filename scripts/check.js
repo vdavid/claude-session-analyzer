@@ -4,8 +4,9 @@
  *
  * Gates run in order, cheapest first, and a failure prints that gate's output in full and stops:
  * a wall of downstream noise from one broken file helps nobody. Scope it with an argument, either
- * a side (`go`, `web`) or a gate name (`vet`, `eslint`, …), so a docs change doesn't sit through a
- * Go test run.
+ * a scope (`go`, `web`, `docs`) or a gate name (`vet`, `eslint`, …), so a docs change doesn't sit
+ * through a Go test run. A gate can be in more than one scope: `prettier` formats the markdown as
+ * well as the frontend.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -15,22 +16,27 @@ import { dirname, resolve } from 'node:path'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 const gates = [
-    { name: 'gofmt', side: 'go', run: ['gofmt', '-l', '.'], failOnOutput: true },
-    { name: 'vet', side: 'go', run: ['go', 'vet', './...'] },
-    { name: 'gotest', side: 'go', run: ['go', 'test', './...'] },
-    { name: 'prettier', side: 'web', run: ['pnpm', '-C', 'web', 'exec', 'prettier', '--check', '.'] },
-    { name: 'eslint', side: 'web', run: ['pnpm', '-C', 'web', 'exec', 'eslint', '.'] },
-    { name: 'svelte-check', side: 'web', run: ['pnpm', '-C', 'web', 'run', 'check'] },
-    { name: 'vitest', side: 'web', run: ['pnpm', '-C', 'web', 'exec', 'vitest', 'run'] },
+    { name: 'gofmt', scopes: ['go'], run: ['gofmt', '-l', '.'], failOnOutput: true },
+    { name: 'vet', scopes: ['go'], run: ['go', 'vet', './...'] },
+    { name: 'docgraph', scopes: ['docs'], run: ['go', 'run', './scripts/docgraph'] },
+    { name: 'gotest', scopes: ['go'], run: ['go', 'test', './...'] },
+    { name: 'prettier', scopes: ['web', 'docs'], run: ['pnpm', 'exec', 'prettier', '--check', '.'] },
+    { name: 'eslint', scopes: ['web'], run: ['pnpm', '-C', 'web', 'exec', 'eslint', '.'] },
+    { name: 'svelte-check', scopes: ['web'], run: ['pnpm', '-C', 'web', 'run', 'check'] },
+    { name: 'vitest', scopes: ['web'], run: ['pnpm', '-C', 'web', 'exec', 'vitest', 'run'] },
 ]
 
+const scopes = [...new Set(gates.flatMap((g) => g.scopes))]
 const wanted = process.argv.slice(2)
 const selected = wanted.length
-    ? gates.filter((g) => wanted.includes(g.name) || wanted.includes(g.side))
+    ? gates.filter((g) => wanted.includes(g.name) || g.scopes.some((s) => wanted.includes(s)))
     : gates
 
 if (!selected.length) {
-    console.error(`Nothing matches ${wanted.join(', ')}. Gates: ${gates.map((g) => g.name).join(', ')}, or go / web.`)
+    console.error(
+        `Nothing matches ${wanted.join(', ')}. Gates: ${gates.map((g) => g.name).join(', ')}. ` +
+            `Scopes: ${scopes.join(', ')}.`,
+    )
     process.exit(2)
 }
 

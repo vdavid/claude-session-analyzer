@@ -28,9 +28,11 @@ contract it consumes is `docs/api.md`; read that before touching anything that r
   shapes), `format.ts` (durations, instants, bytes; `formatBytes` matches `internal/cli/format.go`), `kinds.ts` (the
   eleven kinds: legend order, colour variable, family, and the sentence that keeps each honest), `theme.svelte.ts` (the
   stylesheet read back out for canvas, following `prefers-color-scheme`).
-- `src/lib/transform/`: the tested layer. API JSON into chart series. Nothing else is unit-tested.
+- `src/lib/transform/`: the tested layer. API JSON into chart series. Nothing else is unit-tested. Must-knows:
+  `web/src/lib/transform/CLAUDE.md`.
 - `src/lib/components/`: `charts/` (one component per chart, all over `charts/Chart.svelte`), plus the sheet, the
-  legend, and the small display pieces.
+  legend, and the small display pieces. Must-knows: `web/src/lib/components/CLAUDE.md` and
+  `web/src/lib/components/charts/CLAUDE.md`.
 - `tests/`: Vitest over `src/lib/transform/` and `format.ts`.
 
 ## Checks
