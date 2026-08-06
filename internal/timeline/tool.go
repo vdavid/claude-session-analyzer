@@ -231,23 +231,44 @@ type commandAnalysis struct {
 // classifyCommand names a shell command after the costliest thing it does.
 func classifyCommand(cmd string) ToolClass { return analyzeCommand(cmd).class }
 
+// setsUpShellState are the builtins that arrange the shell rather than do anything in it. A segment that's one of them
+// gets no vote: `cd apps/desktop && python3 tool.py` is a Python run, and calling it `cd` names the walk to the door
+// rather than what happened inside. 212 of the reference session's 7,057 calls were named this way before the rule.
+var setsUpShellState = map[string]bool{
+	"cd": true, "export": true, "set": true, "unset": true, "source": true,
+	"pushd": true, "popd": true, "umask": true, "alias": true,
+}
+
 // analyzeCommand reads a shell command once: which of the things it does costs the most, and which program that was.
 func analyzeCommand(cmd string) commandAnalysis {
 	segments := splitCommand(cmd)
 	ctx := cmdContext{polling: isPollingLoop(segments), sole: len(segments) == 1}
 
 	best := commandAnalysis{class: ClassShell}
-	rank := -1 // below every class, so the first segment with a program in it always names the command
+	rank := -1 // below every class, so the first segment that gets a vote always names the command
+	// fallback covers a command that only arranges the shell, which still has to be named after something.
+	var fallback commandAnalysis
 	for _, seg := range segments {
 		words := commandWords(seg)
 		if len(words) == 0 {
 			continue
 		}
-		class := classifySegment(words, ctx)
-		if precedenceRank[class] > rank {
-			best = commandAnalysis{class: class, program: programLabel(words)}
-			rank = precedenceRank[class]
+		a := commandAnalysis{class: classifySegment(words, ctx), program: programLabel(words)}
+		if fallback.program == "" {
+			fallback = a
 		}
+		if setsUpShellState[baseName(words[0])] {
+			continue
+		}
+		if precedenceRank[a.class] > rank {
+			best, rank = a, precedenceRank[a.class]
+		}
+	}
+	if rank < 0 {
+		if fallback.program != "" {
+			return fallback
+		}
+		return commandAnalysis{class: ClassShell}
 	}
 	return best
 }
@@ -402,6 +423,14 @@ func commandWords(seg string) []string {
 		case "", "do", "then", "else", "elif", "if", "time", "exec", "command", "sudo", "nohup":
 			words = words[1:]
 			continue
+		case "timeout":
+			// A wrapper that hides the real command behind a duration: `timeout 120 cargo test` is a test run, and
+			// reading it as a `timeout` call loses both the class and the program.
+			words = words[1:]
+			for len(words) > 0 && (strings.HasPrefix(words[0], "-") || isDuration(words[0])) {
+				words = words[1:]
+			}
+			continue
 		}
 		// `VAR=value cmd` and a bare assignment both start with a name and an equals sign.
 		if eq := strings.IndexByte(w, '='); eq > 0 && !strings.ContainsAny(w[:eq], "/\"'$") {
@@ -495,6 +524,29 @@ func skipHeredoc(cmd string, start int) int {
 		return start + 2 + i + end + len(delim)
 	}
 	return len(cmd) - 1 // an unterminated heredoc runs to the end of the command
+}
+
+// isDuration says a word is how long something is allowed to take: `120`, `2.5`, `30s`, `5m`. It's what `timeout`
+// takes before the command it wraps.
+func isDuration(w string) bool {
+	if w == "" {
+		return false
+	}
+	switch w[len(w)-1] {
+	case 's', 'm', 'h', 'd':
+		w = w[:len(w)-1]
+	}
+	digits := false
+	for i := 0; i < len(w); i++ {
+		switch {
+		case w[i] >= '0' && w[i] <= '9':
+			digits = true
+		case w[i] == '.':
+		default:
+			return false
+		}
+	}
+	return digits
 }
 
 func isWordByte(c byte) bool {

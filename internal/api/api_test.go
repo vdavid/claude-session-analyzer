@@ -9,9 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/vdavid/claude-session-analyzer/internal/session"
 	"github.com/vdavid/claude-session-analyzer/internal/timeline"
 )
+
+// base is the instant the hand-built timelines here count from. A round UTC time, so a failure reads as an offset.
+var base = time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
 
 const (
 	alphaID  = "11111111-1111-1111-1111-111111111111"
@@ -232,6 +237,140 @@ func TestTimelineReturnsRowsAndTheAggregatesAFrontendWouldOtherwiseSum(t *testin
 		if lane.From.IsZero() || lane.Until.IsZero() {
 			t.Errorf("lane %s: a swimlane needs both ends: %+v", lane.Name, lane)
 		}
+	}
+}
+
+// TestTimelineCountsToolsByGroupAndByLeaf covers the breakdown that answers "which tools did this session use, and who
+// used them". It's built from a hand-made timeline rather than the fixture, because the shapes that matter are a group
+// holding several leaves and a leaf reached from several lanes, and the fixture has neither.
+func TestTimelineCountsToolsByGroupAndByLeaf(t *testing.T) {
+	run := func(lane, tool, group, leaf string, seconds float64) timeline.Row {
+		return timeline.Row{
+			From: base, Until: base.Add(time.Duration(seconds * float64(time.Second))),
+			LaneID: lane, Agent: lane, Kind: timeline.KindToolExecution,
+			Tool: tool, Class: timeline.ClassMCP, ToolGroup: group, ToolLeaf: leaf,
+		}
+	}
+	call := func(lane, tool, group, leaf string) timeline.Row {
+		r := run(lane, tool, group, leaf, 0)
+		r.Kind = timeline.KindToolCall
+		return r
+	}
+
+	tl := &timeline.Timeline{
+		First: base, Last: base.Add(time.Minute),
+		Lanes: []timeline.LaneSpan{{ID: "lead", Name: "lead", IsLead: true, First: base, Last: base.Add(time.Minute)}},
+		Rows: []timeline.Row{
+			// The composing rows sit beside every run and must not be counted as calls of their own.
+			call("lead", "mcp__codegraph__codegraph_search", "codegraph (MCP)", "codegraph_search"),
+			run("lead", "mcp__codegraph__codegraph_search", "codegraph (MCP)", "codegraph_search", 2),
+			run("worker", "mcp__codegraph__codegraph_search", "codegraph (MCP)", "codegraph_search", 3),
+			run("worker", "mcp__codegraph__codegraph_node", "codegraph (MCP)", "codegraph_node", 1),
+			run("lead", "Read", "Read", "Read", 4),
+			// A run that failed is still a call, and the count of failures rides along with it.
+			func() timeline.Row {
+				r := run("lead", "Read", "Read", "Read", 10)
+				r.IsError = true
+				return r
+			}(),
+		},
+	}
+
+	got := buildTimeline(session.Summary{ID: "s"}, tl, false)
+
+	if len(got.Totals.ByTool) != 2 {
+		t.Fatalf("groups = %+v, want codegraph and Read", got.Totals.ByTool)
+	}
+
+	// Biggest first, so a legend reads top down.
+	codegraph, read := got.Totals.ByTool[0], got.Totals.ByTool[1]
+	if codegraph.Group != "codegraph (MCP)" || read.Group != "Read" {
+		t.Fatalf("groups = %q then %q, want them ordered by calls", codegraph.Group, read.Group)
+	}
+
+	if codegraph.Calls != 3 || codegraph.Seconds != 6 {
+		t.Errorf("codegraph = %d calls in %vs, want 3 in 6s: the composing row isn't a call of its own",
+			codegraph.Calls, codegraph.Seconds)
+	}
+	// The answer to "who used codegraph", without the rows.
+	if codegraph.Lanes != 2 {
+		t.Errorf("codegraph lanes = %d, want the 2 that called it", codegraph.Lanes)
+	}
+	if len(codegraph.Tools) != 2 {
+		t.Fatalf("codegraph tools = %+v, want its two methods", codegraph.Tools)
+	}
+	if codegraph.Tools[0].Leaf != "codegraph_search" || codegraph.Tools[0].Calls != 2 {
+		t.Errorf("first method = %+v, want codegraph_search with 2 calls", codegraph.Tools[0])
+	}
+	if codegraph.Tools[0].Tool != "mcp__codegraph__codegraph_search" {
+		t.Errorf("leaf tool = %q, want the raw name a reader can grep for", codegraph.Tools[0].Tool)
+	}
+	// Summing the leaves' lane counts would say 3, and a group only saw 2.
+	if codegraph.Tools[0].Lanes != 2 || codegraph.Tools[1].Lanes != 1 {
+		t.Errorf("method lanes = %d and %d, want 2 and 1", codegraph.Tools[0].Lanes, codegraph.Tools[1].Lanes)
+	}
+
+	if read.Calls != 2 || read.Errors != 1 {
+		t.Errorf("Read = %d calls with %d failures, want 2 and 1", read.Calls, read.Errors)
+	}
+	if len(read.Tools) != 1 || read.Tools[0].Leaf != "Read" {
+		t.Errorf("Read tools = %+v, want the one leaf", read.Tools)
+	}
+}
+
+// TestTimelineToolTotalsAgreeWithTheRows holds the breakdown to the rows it's made of, on the derivation's own golden
+// fixture rather than on a hand-made timeline.
+func TestTimelineToolTotalsAgreeWithTheRows(t *testing.T) {
+	got := decode[timelineBody](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
+
+	if len(got.Totals.ByTool) == 0 {
+		t.Fatal("the fixture makes tool calls, so the breakdown shouldn't be empty")
+	}
+
+	var calls int
+	var seconds float64
+	for _, group := range got.Totals.ByTool {
+		var leafCalls int
+		for _, leaf := range group.Tools {
+			leafCalls += leaf.Calls
+		}
+		if leafCalls != group.Calls {
+			t.Errorf("group %q says %d calls, its leaves add up to %d", group.Group, group.Calls, leafCalls)
+		}
+		calls += group.Calls
+		seconds += group.Seconds
+	}
+
+	// A click on a slice filters the sheet by this, so every row that ran a tool has to name a group that exists.
+	groups := map[string]bool{}
+	for _, group := range got.Totals.ByTool {
+		groups[group.Group] = true
+	}
+
+	var wantCalls int
+	var wantSeconds float64
+	for _, r := range got.Rows {
+		if r.Kind == string(timeline.KindToolCall) {
+			wantCalls++
+		}
+		if r.Tool == "" {
+			if r.ToolGroup != "" {
+				t.Errorf("row %d carries a tool group with no tool: %+v", r.Line, r)
+			}
+			continue
+		}
+		if !groups[r.ToolGroup] {
+			t.Errorf("row %d is in group %q, which the breakdown doesn't list", r.Line, r.ToolGroup)
+		}
+		if r.Kind != string(timeline.KindToolCall) {
+			wantSeconds += r.Seconds
+		}
+	}
+	if calls != wantCalls {
+		t.Errorf("the breakdown counts %d calls, the rows hold %d", calls, wantCalls)
+	}
+	if math.Abs(seconds-wantSeconds) > 0.01 {
+		t.Errorf("the breakdown adds up to %vs, the rows that ran a tool to %vs", seconds, wantSeconds)
 	}
 }
 

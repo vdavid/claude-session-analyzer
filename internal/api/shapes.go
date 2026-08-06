@@ -3,6 +3,7 @@ package api
 import (
 	"math"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/vdavid/claude-session-analyzer/internal/session"
@@ -82,12 +83,48 @@ type totalsBody struct {
 	Lanes            int     `json:"lanes"`
 	// ByKind is the pie: one entry per activity kind that took time, in legend order.
 	ByKind []kindTotal `json:"byKind"`
+	// ByTool is the tool breakdown, biggest first: one entry per group, each holding the exact tools inside it.
+	ByTool []toolGroupTotal `json:"byTool"`
 }
 
 type kindTotal struct {
 	Kind    string  `json:"kind"`
 	Seconds float64 `json:"seconds"`
 	Rows    int     `json:"rows"`
+}
+
+// toolGroupTotal is one slice of the tool breakdown: everything a session did with one tool, at the level a reader
+// asks about. `Bash` is a dozen tools wearing one name and an MCP server arrives as one tool per method, so the group
+// is what the engine's ToolID calls it: `Bash (git)`, `codegraph (MCP)`, `Read`.
+//
+// The counts are calls, not rows. Every call has one row for the agent composing it and one for the tool running, and
+// only the second is counted, so Calls is the number of times the tool was actually used and Seconds is what it cost.
+type toolGroupTotal struct {
+	Group string `json:"group"`
+	// Class is what kind of work the group does, which is what colours it. Every tool in a group shares it.
+	Class   string  `json:"class"`
+	Calls   int     `json:"calls"`
+	Seconds float64 `json:"seconds"`
+	// Lanes is how many lanes made one of these calls, which answers "who used this" without reading the rows. It's
+	// counted per group rather than added up from the tools, because one lane calling two of them is still one lane.
+	Lanes    int `json:"lanes"`
+	Errors   int `json:"errors,omitempty"`
+	TimedOut int `json:"timedOut,omitempty"`
+	// Tools are the exact things that ran inside the group, biggest first.
+	Tools []toolTotal `json:"tools"`
+}
+
+// toolTotal is one exact tool inside a group.
+type toolTotal struct {
+	// Tool is the raw name the harness used, so a reader can grep a transcript for it. Leaf is the part that varies
+	// inside the group: an MCP method, or the program a Bash call ran.
+	Tool     string  `json:"tool"`
+	Leaf     string  `json:"leaf"`
+	Calls    int     `json:"calls"`
+	Seconds  float64 `json:"seconds"`
+	Lanes    int     `json:"lanes"`
+	Errors   int     `json:"errors,omitempty"`
+	TimedOut int     `json:"timedOut,omitempty"`
 }
 
 // laneBody is one swimlane: when the lane was alive, where its holes are, and what it spent its time on.
@@ -130,6 +167,10 @@ type rowBody struct {
 	Info   string `json:"info,omitempty"`
 	Tool   string `json:"tool,omitempty"`
 	Class  string `json:"class,omitempty"`
+	// ToolGroup is which slice of the tool breakdown the row belongs to, so a click on one can filter to its rows
+	// without the browser re-deriving a rule that lives in the engine. The leaf is left out: nothing filters by it,
+	// and the breakdown already carries the leaves it needs.
+	ToolGroup string `json:"toolGroup,omitempty"`
 	// Overlapped marks a row that ran alongside a sibling in the same lane, which is the only thing that breaks the
 	// lane's rows tiling its span.
 	Overlapped bool `json:"overlapped,omitempty"`
@@ -208,6 +249,7 @@ func buildTimeline(sum session.Summary, tl *timeline.Timeline, withRows bool) ti
 	}
 
 	overall := map[timeline.Kind]*tally{}
+	tools := toolTallies{}
 	var laneTime time.Duration
 
 	if withRows {
@@ -216,6 +258,7 @@ func buildTimeline(sum session.Summary, tl *timeline.Timeline, withRows bool) ti
 	for _, r := range tl.Rows {
 		laneTime += r.Duration()
 		add(overall, r)
+		tools.add(r)
 
 		if agg, ok := aggs[r.LaneID]; ok {
 			agg.rows++
@@ -237,6 +280,7 @@ func buildTimeline(sum session.Summary, tl *timeline.Timeline, withRows bool) ti
 
 	body.Totals.LaneTimeSeconds = seconds(laneTime)
 	body.Totals.ByKind = inLegendOrder(overall)
+	body.Totals.ByTool = tools.render()
 
 	for _, lane := range tl.Lanes {
 		agg := aggs[lane.ID]
@@ -269,6 +313,7 @@ func toRow(r timeline.Row) rowBody {
 		Info:       r.Info,
 		Tool:       r.Tool,
 		Class:      string(r.Class),
+		ToolGroup:  r.ToolGroup,
 		Overlapped: r.Overlapped,
 		TimedOut:   r.TimedOut,
 		IsError:    r.IsError,
@@ -291,6 +336,111 @@ func add(into map[timeline.Kind]*tally, r timeline.Row) {
 	}
 	t.rows++
 	t.total += r.Duration()
+}
+
+// toolTallies counts a session's tool use, by group and by the exact tool inside it. Keyed by name rather than held in
+// a slice, because a session reaches for the same tool thousands of times and the order only matters once, at the end.
+type toolTallies map[string]*groupTally
+
+type groupTally struct {
+	class string
+	counts
+	// lanes is the set of lanes that made one of these calls. A group's lane count can't be added up from its tools,
+	// because one lane calling two of them is still one lane, so both levels keep their own set.
+	lanes map[string]bool
+	tools map[string]*leafTally
+}
+
+type leafTally struct {
+	tool string
+	counts
+	lanes map[string]bool
+}
+
+// counts is what both levels of the breakdown hold.
+type counts struct {
+	calls    int
+	total    time.Duration
+	errors   int
+	timedOut int
+}
+
+func (c *counts) add(r timeline.Row) {
+	c.calls++
+	c.total += r.Duration()
+	if r.IsError {
+		c.errors++
+	}
+	if r.TimedOut {
+		c.timedOut++
+	}
+}
+
+// add counts one row, if it's the row a tool call actually ran in. The composing row beside it isn't the tool doing
+// anything, and counting both would report every call twice.
+func (t toolTallies) add(r timeline.Row) {
+	if !r.IsToolRun() {
+		return
+	}
+	group, ok := t[r.ToolGroup]
+	if !ok {
+		group = &groupTally{class: string(r.Class), lanes: map[string]bool{}, tools: map[string]*leafTally{}}
+		t[r.ToolGroup] = group
+	}
+	group.add(r)
+	group.lanes[r.LaneID] = true
+
+	leaf, ok := group.tools[r.ToolLeaf]
+	if !ok {
+		leaf = &leafTally{tool: r.Tool, lanes: map[string]bool{}}
+		group.tools[r.ToolLeaf] = leaf
+	}
+	leaf.add(r)
+	leaf.lanes[r.LaneID] = true
+}
+
+// render orders the breakdown for a legend read top down: most calls first, and ties broken by name so two sessions
+// with the same tools list them the same way.
+func (t toolTallies) render() []toolGroupTotal {
+	out := make([]toolGroupTotal, 0, len(t))
+	for name, group := range t {
+		tools := make([]toolTotal, 0, len(group.tools))
+		for leafName, leaf := range group.tools {
+			tools = append(tools, toolTotal{
+				Tool:     leaf.tool,
+				Leaf:     leafName,
+				Calls:    leaf.calls,
+				Seconds:  seconds(leaf.total),
+				Lanes:    len(leaf.lanes),
+				Errors:   leaf.errors,
+				TimedOut: leaf.timedOut,
+			})
+		}
+		sort.Slice(tools, func(i, j int) bool {
+			if tools[i].Calls != tools[j].Calls {
+				return tools[i].Calls > tools[j].Calls
+			}
+			return tools[i].Leaf < tools[j].Leaf
+		})
+
+		out = append(out, toolGroupTotal{
+			Group:    name,
+			Class:    group.class,
+			Calls:    group.calls,
+			Seconds:  seconds(group.total),
+			Lanes:    len(group.lanes),
+			Errors:   group.errors,
+			TimedOut: group.timedOut,
+			Tools:    tools,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Calls != out[j].Calls {
+			return out[i].Calls > out[j].Calls
+		}
+		return out[i].Group < out[j].Group
+	})
+	return out
 }
 
 // inLegendOrder renders a tally in the order a legend shows the kinds, leaving out the ones with no rows behind them:

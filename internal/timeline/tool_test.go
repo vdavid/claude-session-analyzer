@@ -166,6 +166,26 @@ func TestIdentify(t *testing.T) {
 		},
 		// Nothing in the command outranks a plain shell program, so the first one names it.
 		{transcriptBlockCase{"Bash", "command", "awk '{print $1}' log.txt"}, ToolID{ClassShell, "Bash (shell)", "awk"}},
+		// Arranging the shell isn't work, so it doesn't get to name the command.
+		{
+			transcriptBlockCase{"Bash", "command", "cd apps/desktop && python3 tool.py"},
+			ToolID{ClassShell, "Bash (shell)", "python3"},
+		},
+		{
+			transcriptBlockCase{"Bash", "command", "export RUST_LOG=debug; python3 tool.py"},
+			ToolID{ClassShell, "Bash (shell)", "python3"},
+		},
+		// A command that only arranges the shell still has to be named after something.
+		{transcriptBlockCase{"Bash", "command", "cd /tmp/work"}, ToolID{ClassShell, "Bash (shell)", "cd"}},
+		// A wrapper that hides the command behind a duration loses both the class and the program if it's read as one.
+		{
+			transcriptBlockCase{"Bash", "command", "timeout 120 cargo test -p app"},
+			ToolID{ClassTest, "Bash (test)", "cargo test"},
+		},
+		{
+			transcriptBlockCase{"Bash", "command", "timeout -k 5 30s pnpm check"},
+			ToolID{ClassChecker, "Bash (checker)", "pnpm check"},
+		},
 		// Fetching over the network is web work, wherever it sits in the command.
 		{
 			transcriptBlockCase{"Bash", "command", "curl -s https://example.com | jq .name"},
