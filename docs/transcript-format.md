@@ -80,7 +80,7 @@ So: take the lane label from `.meta.json`, and fall back to the file's base name
 A 2026-08 file has everything:
 
 ```json
-{"agentType":"m1-engine","description":"Build M1 repo skeleton and parser","name":"m1-engine","spawnDepth":0,
+{"agentType":"m1-engine","description":"Build the repo skeleton and the reader","name":"m1-engine","spawnDepth":0,
  "model":"claude-opus-5","taskKind":"in_process_teammate","teamName":"session-532ac591","color":"blue",
  "planModeRequired":false,"permissionMode":"bypassPermissions"}
 ```

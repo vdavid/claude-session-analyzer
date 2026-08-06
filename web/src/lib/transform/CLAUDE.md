@@ -1,4 +1,4 @@
-# transform/ — API JSON into chart series
+# transform/: API JSON into chart series
 
 The only layer here with tests, because it's the only one where being wrong is invisible. A button either works or it
 doesn't; a swimlane bar drawn one hour too wide looks exactly like a correct one.

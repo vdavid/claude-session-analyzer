@@ -1,4 +1,4 @@
-# web/ — the local web app
+# web/: the local web app
 
 SvelteKit with `adapter-static`, Svelte 5 runes, Tailwind v4. Two routes over the Go API, no server of its own. The
 contract it consumes is `docs/api.md`; read that before touching anything that reads a JSON field.

@@ -1,4 +1,4 @@
-# charts/ — the ECharts layer
+# charts/: the ECharts layer
 
 One component per chart, all of them over `Chart.svelte`. A chart component's whole job is to build an option object;
 instance handling lives in one place.

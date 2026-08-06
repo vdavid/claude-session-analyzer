@@ -29,7 +29,7 @@ func TestWaitNamesWhatEndedIt(t *testing.T) {
 	}{
 		{"a person typing", "Could you also check the other lane?", KindWaitingForPerson,
 			"waiting for the next prompt"},
-		{"a teammate replying", relayedTeammateMessage("m1-engine", "M1 is done."), KindWaitingForTeammate,
+		{"a teammate replying", relayedTeammateMessage("m1-engine", "The reader is done."), KindWaitingForTeammate,
 			"waiting for teammate m1-engine"},
 		{"a teammate writing to a subagent", teammateMessage("team-lead", "Stop editing."), KindWaitingForTeammate,
 			"waiting for teammate team-lead"},
@@ -72,7 +72,7 @@ func TestWaitKindsAreSeparateBuckets(t *testing.T) {
 		add(100, queueRec("enqueue", "<task-notification>\n<task-id>b19akwfoq</task-id>\n</task-notification>")).
 		add(110, assistantRec(textBlock("the build finished"))).
 		add(111, systemRec("turn_duration")).
-		add(200, promptRec(relayedTeammateMessage("worker", "M1 is done."))).
+		add(200, promptRec(relayedTeammateMessage("worker", "The reader is done."))).
 		add(210, assistantRec(textBlock("thanks"))).
 		add(211, systemRec("turn_duration")).
 		add(300, promptRec("carry on")).

@@ -1,4 +1,4 @@
-# components/ — the display layer
+# components/: the display layer
 
 Thin by design. Business logic belongs in the Go engine, shaping in `src/lib/transform/`, and these render what those
 two hand over.
