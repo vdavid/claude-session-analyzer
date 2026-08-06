@@ -17,6 +17,8 @@ Apache-2.0.
 - **The transcript format on disk**: `docs/transcript-format.md`. Read it before touching the engine. It's
   reverse-engineered and version-sensitive, and it cost real effort to establish, so extend it rather than
   rediscovering it.
+- **How a timeline is derived**: `docs/timeline-rules.md`. Every judgement call the derivation makes, with the evidence
+  behind it. Read it before changing a rule in `internal/timeline`, and update it when you do.
 - **The current build plan**: `docs/specs/initial-build-plan.md`. Plans get wiped periodically; durable knowledge
   belongs in `docs/`, not in a plan.
 - **Package docs**: each `internal/` package has a doc comment saying what it owns.
@@ -27,6 +29,8 @@ Apache-2.0.
   megabyte-long lines. Retains nothing, so it works on the whole 3.8 GB corpus.
 - `internal/session/`: session discovery under `~/.claude/projects`, and `Lane`, the lead plus one per subagent, each
   with its ordered records.
+- `internal/timeline/`: `Lane` records become activity rows. The seven activity kinds, tool classification, stall and
+  timeout detection, and waiting attribution. Rules in `docs/timeline-rules.md`.
 - `docs/`: this repo's docs. `docs/specs/`: plans.
 
 ## Conventions
@@ -61,5 +65,16 @@ decoding, because hand-written fixtures can't catch format drift:
 - Every transcript on the machine: `CSA_SWEEP=1 go test ./internal/session -run CorpusSweep -v -timeout 20m`. Takes
   about 35 s over 4,438 transcripts. A record type appearing in its skip list that isn't in
   `docs/transcript-format.md` means the format moved.
+
+The derivation has three of its own, same idea. Run them after changing a rule in `internal/timeline`:
+
+- Where one session's time went: `CSA_REAL_SESSION_ID=<id> go test ./internal/timeline -run RealTimeline -v`.
+- The two anomalies the tool exists for: `CSA_REAL_SESSION_ID=532ac591 go test ./internal/timeline -run RealAnomalies
+  -v`.
+- Every session on the machine: `CSA_SWEEP=1 go test ./internal/timeline -run RealTimelineSweep -v -timeout 30m`. Takes
+  about 40 s over 720 sessions, checks the tiling property on all of them, and lists every stall it called.
+
+The golden file (`internal/timeline/testdata/golden/timeline.csv`) holds the whole derivation to a committed CSV.
+Rewrite it with `go test ./internal/timeline -update` and read the diff before committing it.
 
 Set `CSA_REAL_ROOT` to read from somewhere other than the default transcript root.

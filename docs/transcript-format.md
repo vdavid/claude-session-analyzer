@@ -101,14 +101,17 @@ assistant records hold exactly one block, but across 200 random transcripts 10 r
 blocks: one `thinking`, one `text`, and 11 parallel `tool_use` blocks, on `2.1.150` and `2.1.181`). Parse per block, not
 per record.
 
-Block types: `thinking`, `text`, `tool_use`.
+Block types: `thinking`, `text`, `tool_use`, and rarely `fallback`.
 
 - `thinking` carries `thinking` and `signature`. **`thinking` is empty in almost every transcript**: 5,469 of 5,471
   sampled blocks (verified 2026-08-06). Only the signature survives. But it is not always empty: two blocks on `2.1.177`
   carry real reasoning text, so read the field and use it when it's there rather than assuming.
 - `text` is the agent's prose to its caller.
 - `tool_use` carries `id`, `name`, and `input` (tool-specific object). `caller` says `{"type":"direct"}` for a normal
-  call.
+  call. A `Bash` call's `input.timeout` is the limit it asked for, in milliseconds.
+- `fallback` marks the harness switching models mid-response: `{"type":"fallback","from":{"model":...},"to":{"model":
+  ...}}`. It carries no text and isn't the agent doing anything. Two blocks in 250 random transcripts (verified
+  2026-08-06). New block types will appear, so an unknown one has to be stepped over rather than treated as content.
 
 ### `user`
 
@@ -118,13 +121,47 @@ Either a real prompt or a tool result, told apart by the shape of `message.conte
 - An **array**: blocks of `tool_result` (`tool_use_id`, `content`, sometimes `is_error`), `text`, or `image`. Mostly
   length 1, occasionally up to five (verified 2026-08-06). A record holding a `text` block is still a real prompt.
 
-A tool-result record also carries `toolUseResult` alongside `message` with the structured payload (for `Bash`:
-`stdout`, `stderr`, `interrupted`, and friends), and `sourceToolAssistantUUID` pointing back at the `tool_use` record.
-Pair on `tool_use_id`; `sourceToolAssistantUUID` is a second, coarser link.
+A tool-result record also carries `toolUseResult` alongside `message` with the structured payload, and
+`sourceToolAssistantUUID` pointing back at the `tool_use` record. Pair on `tool_use_id`; `sourceToolAssistantUUID` is a
+second, coarser link.
 
-`isMeta: true` marks a harness-injected user record (the `<local-command-caveat>` preamble, for instance) rather than
-something a person typed. Three of 388 user records in the reference session. Timeline code should not count these as
-prompts.
+**`toolUseResult` is not always an object.** Across 200 random transcripts it is an object 24,194 times, a bare string
+1,473 times, and an array 784 times (verified 2026-08-06), so reading a field out of it has to tolerate all three. A
+`Bash` payload object carries `stdout`, `stderr`, `interrupted`, `isImage`, and `noOutputExpected`.
+
+### Reading a timeout off a tool result
+
+A `Bash` call the harness cut short at its timeout arrives in one of two shapes, and only the first is machine-readable:
+
+- The payload object carries `timedOutAfterMs` (the limit that was enforced) and `backgroundTaskId` (the command was
+  moved to the background rather than stopped). Nine of the reference session's 18 calls that ran to their limit carry
+  it.
+- The payload is a bare string, `"Error: Exit code 143\nCommand timed out after 10m 0s"`, with `is_error: true` on the
+  result block. Nothing structured says what the limit was.
+
+The harness caps a `Bash` call at ten minutes whatever it asks for: four calls in the reference session requesting
+1,200 s to 3,600 s all came back at 600.1 s (verified 2026-08-06). That's the `BASH_MAX_TIMEOUT_MS` default and a
+deployment can raise it, so treat it as a ceiling on inference rather than a fact.
+
+### The `Agent` tool's result links a spawn to the lane it created
+
+A teammate spawn comes back with `status: "teammate_spawned"`, `agent_id` (`<name>@<team>`), `name`, `agent_type`,
+`model`, and `color`. That's a direct link from the call to the lane it started, which beats matching on the file name:
+`agent_id`'s local part is the lane's `.meta.json` `name`, and the file name can't be split reliably.
+
+### Input from outside a lane arrives in an envelope
+
+The harness wraps input it relays in a tag of its own, which is structure rather than prose and can be parsed:
+
+- `<teammate-message teammate_id="m1-engine" color="green">…</teammate-message>` is a message from another agent. A
+  subagent gets it as the whole prompt; a lead gets one line of preamble first, `Another Claude session sent a
+  message:`.
+- `<task-notification><task-id>…</task-id>…</task-notification>` is a background task reporting in. It arrives as
+  `queue-operation` content rather than as a prompt.
+
+`isMeta: true` marks a harness-injected user record rather than something a person typed: the
+`<local-command-caveat>` preamble, or a `<system-reminder>` block. Three of 388 user records in the reference session.
+Timeline code should not count these as prompts.
 
 ### `attachment`
 
@@ -139,6 +176,14 @@ them.
 `subtype` of `turn_duration` (with `durationMs` and `messageCount`), `away_summary` (with `content`, the recap text),
 `stop_hook_summary`, `compact_boundary`, `local_command`.
 
+`turn_duration`, `stop_hook_summary`, and `away_summary` all mark a turn ending, which is the only record saying the
+lane went idle rather than kept thinking. Of the reference session's gaps over five minutes that aren't a tool running,
+46 sit right after one of these.
+
+**Subagent lanes carry almost no `system` records at all**: two `compact_boundary` records across 300 sampled subagent
+transcripts, and nothing else (verified 2026-08-06). They carry no `queue-operation` records either. So a subagent's
+idle time can only be bounded by the prompts it receives.
+
 ### Titles
 
 Three types carry a session's title, none of them timestamped, all of them rewritten on most turns, so the last of
@@ -148,8 +193,12 @@ rewrites each of them 109 times, so reading the tail of a file is enough to find
 
 ### `queue-operation`
 
-`operation` is `enqueue` (with `content`, the user's queued text) or `dequeue`. This is how you spot a prompt that
-arrived while the agent was busy, and its `timestamp` is when the user actually typed, not when the agent consumed it.
+`operation` is `enqueue`, `remove`, `dequeue`, or `popAll`, in that order of frequency (3,378 / 2,098 / 1,144 / 55
+across 200 random transcripts, verified 2026-08-06). Only `enqueue` carries `content`, the text that arrived.
+
+This is how you spot input that landed while the agent was busy, and an `enqueue` timestamp is when the input actually
+arrived, not when the agent consumed it. In the reference session, 41 of the 78 idle gaps over five minutes end at an
+`enqueue` rather than at a prompt, so a timeline that only watches prompts misplaces half of them.
 
 ## Timing semantics
 
