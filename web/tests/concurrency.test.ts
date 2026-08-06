@@ -29,7 +29,13 @@ describe('concurrencyTrace', () => {
         const trace = concurrencyTrace(
             [
                 lane('a', '2026-01-01T00:00:00Z', '2026-01-01T10:00:00Z', [
-                    { from: '2026-01-01T00:00:00Z', until: '2026-01-01T05:00:00Z', seconds: 18000, kind: 'waiting for a person', info: '' },
+                    {
+                        from: '2026-01-01T00:00:00Z',
+                        until: '2026-01-01T05:00:00Z',
+                        seconds: 18000,
+                        kind: 'waiting for a person',
+                        info: '',
+                    },
                 ]),
             ],
             10,

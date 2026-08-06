@@ -65,7 +65,13 @@ describe('busySegments', () => {
 })
 
 describe('buildSwimlane', () => {
-    const lead = lane({ id: 'lead', name: 'lead', isLead: true, from: '2026-01-01T00:00:00Z', until: '2026-01-01T10:00:00Z' })
+    const lead = lane({
+        id: 'lead',
+        name: 'lead',
+        isLead: true,
+        from: '2026-01-01T00:00:00Z',
+        until: '2026-01-01T10:00:00Z',
+    })
     const direct = lane({ id: 'a1', name: 'reviewer', from: '2026-01-01T02:00:00Z', until: '2026-01-01T03:00:00Z' })
     const wf = (id: string, n: number) =>
         Array.from({ length: n }, (_, i) =>
@@ -123,6 +129,27 @@ describe('buildSwimlane', () => {
         expect(row.gaps).toEqual([
             { from: t('2026-01-01T01:00:00Z'), until: t('2026-01-01T02:00:00Z'), kind: 'waiting for a teammate' },
         ])
+    })
+
+    it('labels a workflow’s lanes by id when they all share one name', () => {
+        const rows = buildSwimlane(wf('wf_a', 3), { expanded: new Set(['wf_a']) })
+        // Sorted by start, and the two that began at 04:00 come before the one that began at 05:00.
+        expect(rows.slice(1).map((r) => r.label)).toEqual(['wf_a-0', 'wf_a-2', 'wf_a-1'])
+        expect(rows[1].sublabel).toBe('workflow-subagent')
+    })
+
+    it('keeps the names when a workflow’s lanes can be told apart by them', () => {
+        const named = ['scout', 'builder'].map((name, i) =>
+            lane({
+                id: `wf_b-${i}`,
+                name,
+                workflowId: 'wf_b',
+                from: '2026-01-01T04:00:00Z',
+                until: '2026-01-01T05:00:00Z',
+            }),
+        )
+        const rows = buildSwimlane(named, { expanded: new Set(['wf_b']) })
+        expect(rows.slice(1).map((r) => r.label)).toEqual(['scout', 'builder'])
     })
 
     it('skips a lane whose span is unreadable rather than drawing it at the epoch', () => {

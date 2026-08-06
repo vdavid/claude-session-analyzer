@@ -111,27 +111,35 @@ export function buildSwimlane(lanes: readonly Lane[], options: SwimlaneOptions):
     const rows: SwimlaneRow[] = []
     for (const l of byStart(lead)) rows.push(laneRow(l, 0))
 
-    const workflows = [...grouped.entries()].sort(
-        (a, b) => earliest(a[1]) - earliest(b[1]) || a[0].localeCompare(b[0]),
-    )
+    const workflows = [...grouped.entries()].sort((a, b) => earliest(a[1]) - earliest(b[1]) || a[0].localeCompare(b[0]))
     for (const [workflowId, members] of workflows) {
         const expanded = options.expanded.has(workflowId)
         const drawn = expanded ? byStart(members).slice(0, maxPerGroup) : []
+        const named = distinctNames(members)
         rows.push(workflowRow(workflowId, members, expanded, members.length - drawn.length))
-        for (const l of drawn) rows.push(laneRow(l, 1, workflowId))
+        for (const l of drawn) rows.push(laneRow(l, 1, workflowId, named ? undefined : l.id.slice(0, 8)))
     }
 
     for (const l of byStart(direct)) rows.push(laneRow(l, 0))
     return rows
 }
 
-function laneRow(lane: Lane, depth: number, workflowId?: string): SwimlaneRow {
+/**
+ * Whether a group's lanes can be told apart by name. A workflow's 848 lanes are all called
+ * `workflow-subagent`, and a column of that name 150 times says nothing, so those rows fall back to
+ * the front of their lane id instead.
+ */
+function distinctNames(lanes: readonly Lane[]): boolean {
+    return new Set(lanes.map((l) => l.name)).size === lanes.length
+}
+
+function laneRow(lane: Lane, depth: number, workflowId?: string, labelOverride?: string): SwimlaneRow {
     const from = instantMs(lane.from) as number
     const until = instantMs(lane.until) as number
     return {
         key: lane.isLead ? `lead:${lane.id}` : `lane:${lane.id}`,
-        label: lane.name || lane.id,
-        sublabel: lane.isLead ? 'the session itself' : (lane.model ?? ''),
+        label: labelOverride || lane.name || lane.id,
+        sublabel: lane.isLead ? 'the session itself' : labelOverride ? lane.name : (lane.model ?? ''),
         kind: lane.isLead ? 'lead' : 'lane',
         depth,
         workflowId,

@@ -100,8 +100,7 @@
     --color-band-wait: var(--csa-band-wait);
     --color-band-trouble: var(--csa-band-trouble);
 
-    --font-sans:
-        ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
+    --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
     --shadow-card: var(--csa-shadow-card);
