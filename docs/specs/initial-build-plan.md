@@ -329,10 +329,9 @@ What this turned up:
    are fragments of a lane already found), and 781,246 rows became 857,731. Four more `API error` rows turned up in the
    blind spot, 241 to 245. All 724 sessions still tile, and all 444 lanes found under another slug sit inside their
    lead's lifetime: not one starts before it or ends after it.
-4. **`TestRealTimeline`'s "working" column is wrong, and was before this change.** It sums row durations keyed by
-   `r.Agent`, so lanes sharing a name (23 of them called `general-purpose` in session `9a4d3375`) each report the whole
-   group's total: "alive 1m17s, working 4h00m". `docs/timeline-rules.md` already says to group by `LaneID`, not by
-   `Agent`. Left alone deliberately, since it's outside this change; it's a one-line fix in the test.
+4. **`TestRealTimeline`'s "working" column summed by name.** Lanes sharing a name (23 of them called `general-purpose`
+   in session `9a4d3375`) each reported the whole group's total: "alive 1m17s, working 4h00m". It keys by `LaneID` now,
+   which is what `docs/timeline-rules.md` says to group by.
 
 **M5 done.** The web app is in `web/`, a pnpm workspace beside the Go module. `/` lists every session on the machine;
 `/session/[id]` derives one on load and shows a concurrency trace, the two totals side by side, a donut of lane time by

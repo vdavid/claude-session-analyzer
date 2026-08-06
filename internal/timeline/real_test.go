@@ -53,13 +53,15 @@ func TestRealTimeline(t *testing.T) {
 	}
 	t.Logf("  %-*s %12s", kindWidth, "total", FormatDuration(sum))
 
+	// Keyed by lane id, not by name: 23 lanes of one session on this machine are all called `general-purpose`, and
+	// keying by name reports the group's total against every one of them.
 	byLane := map[string]time.Duration{}
 	for _, r := range tl.Rows {
-		byLane[r.Agent] += r.Duration()
+		byLane[r.LaneID] += r.Duration()
 	}
 	t.Log("per lane, alive for and busy with:")
 	for _, lane := range tl.Lanes {
-		busy := byLane[lane.Name] - laneWaitTotal(tl, lane.ID)
+		busy := byLane[lane.ID] - laneWaitTotal(tl, lane.ID)
 		t.Logf("  %-24s alive %10s, working %10s, %d rows",
 			lane.Name, FormatDuration(lane.Duration()), FormatDuration(busy), lane.Rows)
 	}
