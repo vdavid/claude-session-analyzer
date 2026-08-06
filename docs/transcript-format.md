@@ -127,7 +127,8 @@ it apart, and only they should be read (the prose is copy and changes):
 
 Six of the 245 also carry `errorDetails`, which nothing reads yet.
 
-Scale and spread (verified 2026-08-06, all 4,438 transcripts): 245 records in 185 of them, across 38 harness versions
+Scale and spread (verified 2026-08-06, the 4,445 transcripts on this machine): 245 records in 185 of them, across 38
+harness versions
 from `2.1.138` to `2.1.221`, in lead and subagent lanes alike. They never come in runs: no transcript holds two in a
 row, so the retries a long outage costs are invisible and only the gap before the record measures them. That gap is
 under a minute for 191 of them, and its longest is 1h19m.
