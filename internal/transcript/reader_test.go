@@ -400,6 +400,10 @@ func TestReaderCapsLargeValuesSoWholeCorpusFitsInMemory(t *testing.T) {
 		t.Errorf("elided keys = %v, want [content]", use.InputElided)
 	}
 
+	if got[1].Blocks[0].ToolUseID != "t1" {
+		t.Fatalf("second record isn't the tool result: %+v", got[1])
+	}
+
 	result := got[1].Blocks[0]
 	if len(result.Text) != 1000 {
 		t.Errorf("result text length = %d, want it truncated to 1000", len(result.Text))
@@ -412,6 +416,25 @@ func TestReaderCapsLargeValuesSoWholeCorpusFitsInMemory(t *testing.T) {
 	}
 	if got[1].ToolUseResultBytes < 5000 {
 		t.Errorf("toolUseResult size = %d, want the real size recorded", got[1].ToolUseResultBytes)
+	}
+}
+
+func TestReaderReportsHowLongATruncatedPromptWas(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "prompt.jsonl")
+	long := strings.Repeat("z", 3000)
+	body := `{"type":"user","uuid":"u","timestamp":"2026-08-03T08:44:00.000Z",` +
+		`"message":{"role":"user","content":"` + long + `"}}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	got, _ := readAll(t, path, Options{MaxValueBytes: 100})
+
+	if len(got[0].Prompt) != 100 {
+		t.Errorf("prompt length = %d, want it capped at 100", len(got[0].Prompt))
+	}
+	if got[0].PromptBytes != 3000 {
+		t.Errorf("prompt bytes = %d, want the real length so a reader can show that it was cut", got[0].PromptBytes)
 	}
 }
 

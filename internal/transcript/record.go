@@ -64,8 +64,10 @@ type Record struct {
 	Model string
 	// Blocks holds the message's content blocks, in order. Assistant and user records.
 	Blocks []Block
-	// Prompt is a user record's text when its content is a bare string, which means a person typed it.
-	Prompt string
+	// Prompt is a user record's text when its content is a bare string, which means a person typed it. It's capped at
+	// Options.MaxValueBytes, and PromptBytes gives its real length.
+	Prompt      string
+	PromptBytes int
 	// Usage carries token counts on an assistant record. Blocks before the last of a request hold partial counts.
 	Usage *Usage
 
@@ -128,6 +130,7 @@ type Usage struct {
 // SystemInfo is a system record's payload.
 type SystemInfo struct {
 	Subtype string
+	// Content is the record's text, capped at Options.MaxValueBytes.
 	Content string
 	// Duration is a turn_duration record's `durationMs`.
 	Duration     time.Duration
@@ -149,5 +152,6 @@ type CompactInfo struct {
 // got around to reading it.
 type QueueInfo struct {
 	Operation string
-	Content   string
+	// Content is what was typed, capped at Options.MaxValueBytes.
+	Content string
 }

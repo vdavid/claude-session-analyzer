@@ -257,7 +257,7 @@ func (w wireRecord) toRecord(line, maxValue int) *Record {
 				CacheReadInputTokens:     u.CacheReadInputTokens,
 			}
 		}
-		rec.Prompt, rec.Blocks = decodeContent(w.Message.Content, maxValue)
+		rec.Prompt, rec.PromptBytes, rec.Blocks = decodeContent(w.Message.Content, maxValue)
 	}
 
 	rec.ToolUseResultBytes = len(w.ToolUseResult)
@@ -304,23 +304,24 @@ func (w wireRecord) toRecord(line, maxValue int) *Record {
 
 // decodeContent reads a message's content, which is a bare string when a person typed the message and an array of
 // blocks otherwise.
-func decodeContent(raw json.RawMessage, maxValue int) (prompt string, blocks []Block) {
+func decodeContent(raw json.RawMessage, maxValue int) (prompt string, promptBytes int, blocks []Block) {
 	if len(raw) == 0 {
-		return "", nil
+		return "", 0, nil
 	}
 	if raw[0] == '"' {
-		return truncate(asString(raw), maxValue), nil
+		full := asString(raw)
+		return truncate(full, maxValue), len(full), nil
 	}
 
 	var wires []wireBlock
 	if err := json.Unmarshal(raw, &wires); err != nil {
-		return "", nil
+		return "", 0, nil
 	}
 	blocks = make([]Block, 0, len(wires))
 	for _, w := range wires {
 		blocks = append(blocks, w.toBlock(maxValue))
 	}
-	return "", blocks
+	return "", 0, blocks
 }
 
 func (w wireBlock) toBlock(maxValue int) Block {
