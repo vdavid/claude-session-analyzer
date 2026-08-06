@@ -85,7 +85,6 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
       "id": "am0-scope-ceiling-7aba8978eb07ad55",
       "name": "m0-scope-ceiling",
       "isLead": false,
-      "workflowId": "wf_01abc",
       "model": "claude-opus-5",
       "color": "cyan",
       "from": "2026-08-04T05:44:33.822Z",
@@ -113,12 +112,19 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
       "agent": "lead",
       "kind": "writing",
       "info": "I'll dig into both. Let me start by finding the relevant code.",
+      "line": 18
+    },
+    {
+      "from": "2026-08-03T09:12:04.11Z",
+      "until": "2026-08-03T09:14:58.902Z",
+      "seconds": 174.792,
+      "laneId": "am1-engine-aeeff1f0",
+      "agent": "m1-engine",
+      "kind": "tool execution",
+      "info": "Bash (test): go test ./...",
       "tool": "Bash",
       "class": "test",
-      "overlapped": false,
-      "timedOut": false,
-      "isError": false,
-      "line": 18
+      "line": 512
     }
   ]
 }
@@ -136,7 +142,11 @@ breakdown of **lane time**, so say so in the legend.
 
 ### Lanes and gaps
 
-- **Group rows by `laneId`, never by `agent`.** Two lanes carry the same name when neither has a `.meta.json`.
+- **Group rows by `laneId`, never by `agent`.** Two lanes carry the same name when neither has a `.meta.json`, and one
+  session on this machine has 977 lanes all called `workflow-subagent`.
+- `workflowId` names the workflow that spawned a lane, and is absent for one the session spawned directly.
+- A field that doesn't apply is left out rather than sent empty: `tool` and `class` only appear on a tool call, a tool
+  execution, or a stall, and `overlapped`, `timedOut`, and `isError` only when they're true.
 - `color` is what the terminal used and it's often missing, so the UI needs a palette of its own.
 - `gaps` are the stretches a lane produced nothing: its `waiting` and `stalled` rows, in time order. A swimlane bar
   drawn solid from `from` to `until` would claim the lane was busy the whole time, and on the reference session's lead
