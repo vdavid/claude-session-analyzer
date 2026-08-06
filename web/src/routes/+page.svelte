@@ -108,29 +108,35 @@
     </div>
 
     {#if data}
-        <dl class="lg:w-64 lg:border-l lg:border-border-base lg:pl-8">
-            <div class="flex items-baseline justify-between gap-4 border-b border-border-base py-2 lg:block lg:py-0">
-                <dt class="eyebrow">Sessions</dt>
-                <dd class="tnum font-mono text-2xl leading-tight text-ink lg:mt-0.5">
-                    {formatCount(data.totals.sessions)}
-                </dd>
-            </div>
-            <div
-                class="flex items-baseline justify-between gap-4 border-b border-border-base py-2 lg:mt-4 lg:block lg:py-0"
-            >
-                <dt class="eyebrow">Subagent lanes</dt>
-                <dd class="tnum font-mono text-2xl leading-tight text-ink lg:mt-0.5">
-                    {formatCount(data.totals.subagents)}
-                </dd>
-            </div>
-            <div class="flex items-baseline justify-between gap-4 py-2 lg:mt-4 lg:block lg:py-0">
-                <dt class="eyebrow">On disk</dt>
-                <dd class="tnum font-mono text-2xl leading-tight text-ink lg:mt-0.5">
-                    {formatBytes(data.totals.bytes)}
-                </dd>
-            </div>
-            <p class="mt-3 font-mono text-[11px] leading-snug break-all text-ink-faint">{data.root}</p>
-        </dl>
+        <div class="lg:w-64 lg:border-l lg:border-border-base lg:pl-8">
+            <dl>
+                <div
+                    class="flex items-baseline justify-between gap-4 border-b border-border-base py-2 lg:block lg:py-0"
+                >
+                    <dt class="eyebrow">Sessions</dt>
+                    <dd class="tnum font-mono text-2xl leading-tight text-ink lg:mt-0.5">
+                        {formatCount(data.totals.sessions)}
+                    </dd>
+                </div>
+                <div
+                    class="flex items-baseline justify-between gap-4 border-b border-border-base py-2 lg:mt-4 lg:block lg:py-0"
+                >
+                    <dt class="eyebrow">Subagent lanes</dt>
+                    <dd class="tnum font-mono text-2xl leading-tight text-ink lg:mt-0.5">
+                        {formatCount(data.totals.subagents)}
+                    </dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 py-2 lg:mt-4 lg:block lg:py-0">
+                    <dt class="eyebrow">On disk</dt>
+                    <dd class="tnum font-mono text-2xl leading-tight text-ink lg:mt-0.5">
+                        {formatBytes(data.totals.bytes)}
+                    </dd>
+                </div>
+            </dl>
+            <p class="mt-3 font-mono text-[11px] leading-snug break-all text-ink-faint">
+                Read from {data.root}
+            </p>
+        </div>
     {/if}
 </section>
 
@@ -198,7 +204,7 @@
                                 </a>
                                 <span class="block truncate text-xs text-ink-faint">
                                     {session.projectName || 'project unknown'}
-                                    <span class="text-ink-faint/70">·</span>
+                                    <span class="text-ink-faint">·</span>
                                     <span class="font-mono">{session.id.slice(0, 8)}</span>
                                 </span>
                             </td>

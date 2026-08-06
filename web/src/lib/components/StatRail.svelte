@@ -16,14 +16,18 @@
 
 <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border-base bg-border-base sm:grid-cols-4">
     {#each stats as stat (stat.label)}
+        <!-- The note lives inside the `dd`: a group in a `dl` may hold only a `dt` and its `dd`, and
+             the caveat is part of what the number means rather than a sibling remark. -->
         <div class="bg-surface px-4 py-3" title={stat.title}>
             <dt class="eyebrow">{stat.label}</dt>
-            <dd class="tnum mt-1 font-mono text-xl leading-tight font-medium tracking-tight text-ink">
-                {stat.value}
+            <dd class="mt-1">
+                <span class="tnum block font-mono text-xl leading-tight font-medium tracking-tight text-ink">
+                    {stat.value}
+                </span>
+                {#if stat.note}
+                    <span class="mt-1 block text-xs leading-snug text-ink-faint">{stat.note}</span>
+                {/if}
             </dd>
-            {#if stat.note}
-                <p class="mt-1 text-xs leading-snug text-ink-faint">{stat.note}</p>
-            {/if}
         </div>
     {/each}
 </dl>

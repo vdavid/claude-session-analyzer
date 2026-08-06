@@ -162,7 +162,7 @@
     <header class="rise max-w-4xl">
         <p class="eyebrow">
             {session.projectName || 'Project unknown'}
-            <span class="text-ink-faint/60"> · </span>
+            <span class="text-ink-faint"> · </span>
             <span class="normal-case">{shortId(session.id)}</span>
         </p>
         <h1 class="mt-2 text-3xl leading-tight font-semibold tracking-tight text-balance text-ink sm:text-4xl">

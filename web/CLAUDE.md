@@ -19,6 +19,8 @@ contract it consumes is `docs/api.md`; read that before touching anything that r
 - Tailwind tokens are registered `@theme inline` over custom properties, so **opacity modifiers (`bg-canvas/50`) don't
   work** on them. Use `color-mix()`.
 - ECharts is assembled from parts in `components/charts/echarts.ts`. A new chart type has to register itself there.
+- **The light ink ramp is set by its tightest pairing**, faint text on `sunken`, which clears 4.5:1 with nothing spare.
+  Don't lighten `--csa-ink-faint` or `--csa-ink-muted`; both pages audit clean under axe in both themes.
 
 ## Module map
 
@@ -35,5 +37,9 @@ contract it consumes is `docs/api.md`; read that before touching anything that r
 
 `pnpm check web` at the repo root, or `pnpm check prettier` / `eslint` / `svelte-check` / `vitest` for one gate. A green
 build is not evidence the page works: drive it with `pnpm dev` against a real session before calling anything done.
+
+There's no automated accessibility or browser gate. When you touch layout or colour, run axe over both pages in both
+themes yourself, and **wait for the entrance animation to settle first** (`document.getAnimations()`), or the `.rise`
+fade reports thousands of contrast failures that aren't there once the page lands.
 
 Deeper notes, including the design system and what each chart is for: `docs/frontend.md`.

@@ -24,9 +24,11 @@
     --csa-sunken: #eceff4;
     --csa-border: #dce1e9;
     --csa-border-strong: #bcc5d2;
+    /* The light ramp is set by the tightest pairing, faint text on `sunken`, which has to clear 4.5:1.
+       Measured with axe on both pages: 15.2, 6.5, and 4.7 against `sunken`. Don't lighten these. */
     --csa-ink: #151a21;
-    --csa-ink-muted: #545d6b;
-    --csa-ink-faint: #737d8c;
+    --csa-ink-muted: #4c5563;
+    --csa-ink-faint: #626b78;
     --csa-accent: #2c5fa8;
     --csa-accent-soft: #dfe8f6;
 
