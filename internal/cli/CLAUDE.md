@@ -16,8 +16,8 @@ call belongs in `internal/timeline`, not here.
   two that matter: an unknown id and an ambiguous one.
 - **`serve` binds `127.0.0.1` and only that.** Ports come from the committed `.env` (`internal/dotenv`), a flag beats
   the file, and the frontend's port is read only to name the origins the browser will let read an answer.
-- `formatBytes` here and `formatBytes` in `web/src/lib/format.ts` have to agree: the same number shows up on both
-  surfaces.
+- `humanBytes` here and `formatBytes` in `web/src/lib/format.ts` have to agree, down to the 1000-unit base: the same
+  number shows up on both surfaces.
 
 ## Module map
 

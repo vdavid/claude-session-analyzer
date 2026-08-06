@@ -12,7 +12,7 @@ size; the header row sorts on any of those. Under the list, a collapsed "What th
 four caveats a reader needs before trusting anything: thinking spans include model latency, lane time isn't elapsed
 time, stall detection is a heuristic, and a thinking row's subject is borrowed from what came next.
 
-**`/session/[id]`** analyses one session on load, in four stacked sections:
+**`/session/[id]`** analyses one session on load, in five stacked sections:
 
 1. **The trace.** A stepped area strip under the header showing how many agents were producing at once across the span,
    with the peak called out. It's the shape of the session in one line: where the parallel waves were, and how much of

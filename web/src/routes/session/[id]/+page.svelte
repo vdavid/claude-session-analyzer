@@ -205,7 +205,7 @@
         <section class="rise mt-8 max-w-2xl" style:--rise-delay="140ms">
             <Notice
                 headline="There's no timeline to draw here"
-                detail="Not one record in this transcript carries a timestamp, so there's nothing to place on a clock. That's true of 99 of the 725 sessions on this machine, most of them a few lines long."
+                detail="Not one record in this transcript carries a timestamp, so there's nothing to place on a clock. That's usual for a session that ended within its first few lines."
             />
         </section>
     {:else}
@@ -288,7 +288,7 @@
                 <div class="mt-4 max-w-2xl">
                     <Notice
                         headline="No lane here carries a readable span"
-                        detail="Every record in this session is missing its timestamp, which happens on 99 of the sessions on this machine."
+                        detail="Every record in this session is missing its timestamp, so no lane has a span to draw."
                     />
                 </div>
             {/if}
