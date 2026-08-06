@@ -530,3 +530,83 @@ func (e *errAfter) Read(p []byte) (int, error) {
 	e.done = true
 	return copy(p, e.body), nil
 }
+
+// TestReaderDecodesAnAPIErrorRecord covers the record the harness writes in place of a response the API didn't give.
+// It arrives as an ordinary assistant record with a synthetic model, so a reader that only looks at blocks sees the
+// error text as if the agent had written it. The typed fields are what tells them apart.
+//
+// Shapes measured across the whole corpus (245 records in 185 transcripts, verified 2026-08-06): `error` is always
+// there, `apiErrorStatus` is missing on 76 of them, and the text is a single block of prose meant for a person.
+func TestReaderDecodesAnAPIErrorRecord(t *testing.T) {
+	const line = `{"type":"assistant","timestamp":"2026-08-03T12:00:00.000Z","isApiErrorMessage":true,` +
+		`"error":"rate_limit","apiErrorStatus":429,"message":{"model":"<synthetic>","content":[{"type":"text",` +
+		`"text":"API Error: Server is temporarily limiting requests"}]}}`
+
+	rec := readOne(t, line)
+	if rec.APIError == nil {
+		t.Fatal("an API error record needs its typed fields, or the derivation can only match on wording")
+	}
+	if rec.APIError.Kind != "rate_limit" {
+		t.Errorf("kind = %q, want the typed error", rec.APIError.Kind)
+	}
+	if rec.APIError.Status != 429 {
+		t.Errorf("status = %d, want 429", rec.APIError.Status)
+	}
+	if len(rec.Blocks) != 1 || rec.Blocks[0].Type != BlockText {
+		t.Errorf("the text block still has to decode, it's what a row says: %+v", rec.Blocks)
+	}
+}
+
+// TestReaderToleratesAPIErrorShapes covers the variants the corpus holds and the ones a later version might bring. A
+// field arriving in a shape nothing expected must cost that field and nothing else: the record still decodes.
+func TestReaderToleratesAPIErrorShapes(t *testing.T) {
+	cases := []struct {
+		name       string
+		fields     string
+		wantErr    bool
+		wantKind   string
+		wantStatus int
+	}{
+		{"no status, which is 76 of the corpus's 245", `"isApiErrorMessage":true,"error":"unknown"`,
+			true, "unknown", 0},
+		{"a status the harness quoted", `"isApiErrorMessage":true,"error":"server_error","apiErrorStatus":"529"`,
+			true, "server_error", 529},
+		{"an ordinary response carries none of this", `"isApiErrorMessage":false`, false, "", 0},
+		{"a flag that isn't there at all", `"requestId":"req_1"`, false, "", 0},
+		{"an error field in a shape nothing expected",
+			`"isApiErrorMessage":true,"error":{"code":"rate_limit"},"apiErrorStatus":429`, true, "", 429},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rec := readOne(t, `{"type":"assistant","timestamp":"2026-08-03T12:00:00.000Z",`+c.fields+
+				`,"message":{"model":"<synthetic>","content":[{"type":"text","text":"something"}]}}`)
+
+			if (rec.APIError != nil) != c.wantErr {
+				t.Fatalf("APIError = %+v, want set = %v", rec.APIError, c.wantErr)
+			}
+			if !c.wantErr {
+				return
+			}
+			if rec.APIError.Kind != c.wantKind {
+				t.Errorf("kind = %q, want %q", rec.APIError.Kind, c.wantKind)
+			}
+			if rec.APIError.Status != c.wantStatus {
+				t.Errorf("status = %d, want %d", rec.APIError.Status, c.wantStatus)
+			}
+			if len(rec.Blocks) != 1 {
+				t.Errorf("one odd field shouldn't cost the record its blocks: %+v", rec.Blocks)
+			}
+		})
+	}
+}
+
+// readOne decodes a single transcript line, which is enough for a record whose shape is the whole point.
+func readOne(t *testing.T, line string) *Record {
+	t.Helper()
+	r := NewReader(strings.NewReader(line+"\n"), Options{})
+	if !r.Next() {
+		t.Fatalf("nothing decoded from %s (err: %v)", line, r.Err())
+	}
+	return r.Record()
+}

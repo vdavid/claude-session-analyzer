@@ -113,6 +113,27 @@ Block types: `thinking`, `text`, `tool_use`, and rarely `fallback`.
   ...}}`. It carries no text and isn't the agent doing anything. Two blocks in 250 random transcripts (verified
   2026-08-06). New block types will appear, so an unknown one has to be stepped over rather than treated as content.
 
+### An assistant record can be the API failing rather than the agent answering
+
+When a request doesn't come back, the harness writes what looks like an ordinary assistant record: one `text` block
+holding prose for the person at the terminal, `model: "<synthetic>"`, and zeros throughout `usage`. Three fields tell
+it apart, and only they should be read (the prose is copy and changes):
+
+- `isApiErrorMessage: true`, always present on one.
+- `error`, a typed string. Across the corpus: `rate_limit` (70), `authentication_failed` (57), `server_error` (46),
+  `invalid_request` (43), `unknown` (27), `model_not_found` (2). Always present.
+- `apiErrorStatus`, an HTTP status as a bare number: 429, 401, 529, 500, 413, 404. **Missing on 76 of the 245**, so a
+  record with no status is ordinary.
+
+Six of the 245 also carry `errorDetails`, which nothing reads yet.
+
+Scale and spread (verified 2026-08-06, all 4,438 transcripts): 245 records in 185 of them, across 38 harness versions
+from `2.1.138` to `2.1.221`, in lead and subagent lanes alike. They never come in runs: no transcript holds two in a
+row, so the retries a long outage costs are invisible and only the gap before the record measures them. That gap is
+under a minute for 191 of them, and its longest is 1h19m.
+
+`isApiErrorMessage: false` appears on ordinary assistant records too, so the flag's presence means nothing on its own.
+
 ### `user`
 
 Either a real prompt or a tool result, told apart by the shape of `message.content`:

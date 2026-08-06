@@ -74,6 +74,9 @@ type Record struct {
 	// Title is the text of a custom-title, ai-title, or agent-name record.
 	Title string
 
+	// APIError is set when the record is the harness reporting that the API didn't answer, rather than a response.
+	APIError *APIError
+
 	// Attachment is an attachment record's `attachment.type`.
 	Attachment string
 	// System carries a system record's subtype and payload.
@@ -117,6 +120,19 @@ type Block struct {
 
 	// IsError marks a tool result the tool reported as a failure.
 	IsError bool
+}
+
+// APIError is the harness saying the API refused or never answered a request. Its record is an ordinary assistant
+// record carrying a text block and the model `<synthetic>`, so nothing but these typed fields tells it from a response
+// the agent actually wrote.
+type APIError struct {
+	// Kind is the `error` field: `rate_limit`, `authentication_failed`, `server_error`, `invalid_request`,
+	// `model_not_found`, and `unknown` across the corpus, and empty when a later version puts something else there.
+	// New values appear over time, so don't switch on it exhaustively.
+	Kind string
+	// Status is the HTTP status the API answered with: 429, 401, 529, 500, 413, and 404 in the corpus. Zero when the
+	// record carries none, which is 76 of its 245 (verified 2026-08-06).
+	Status int
 }
 
 // Usage is an assistant record's token accounting.

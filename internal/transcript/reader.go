@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -184,6 +185,12 @@ type wireRecord struct {
 	Message       *wireMessage    `json:"message"`
 	ToolUseResult json.RawMessage `json:"toolUseResult"`
 
+	// The three API-error fields. `error` and `apiErrorStatus` stay raw: they're only meaningful when the flag is set,
+	// and a later version putting an object or a quoted number there must cost the field rather than the record.
+	IsAPIError     bool            `json:"isApiErrorMessage"`
+	APIError       json.RawMessage `json:"error"`
+	APIErrorStatus json.RawMessage `json:"apiErrorStatus"`
+
 	Attachment *struct {
 		Type string `json:"type"`
 	} `json:"attachment"`
@@ -258,6 +265,10 @@ func (w wireRecord) toRecord(line, maxValue int) *Record {
 			}
 		}
 		rec.Prompt, rec.PromptBytes, rec.Blocks = decodeContent(w.Message.Content, maxValue)
+	}
+
+	if w.IsAPIError {
+		rec.APIError = &APIError{Kind: asString(w.APIError), Status: asInt(w.APIErrorStatus)}
 	}
 
 	rec.ToolUseResultBytes = len(w.ToolUseResult)
@@ -406,6 +417,22 @@ func asString(raw json.RawMessage) string {
 		return ""
 	}
 	return s
+}
+
+// asInt reads a whole number that may have been written as a string. An HTTP status arrives bare across the corpus,
+// and a quoted one would otherwise read as zero, which is the same value a missing field has.
+func asInt(raw json.RawMessage) int {
+	if len(raw) == 0 {
+		return 0
+	}
+	var n float64
+	if err := json.Unmarshal(raw, &n); err == nil {
+		return int(n)
+	}
+	if v, err := strconv.Atoi(asString(raw)); err == nil {
+		return v
+	}
+	return 0
 }
 
 func fits(n, maxValue int) bool { return maxValue == Unlimited || n <= maxValue }
