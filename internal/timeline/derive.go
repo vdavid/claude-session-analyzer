@@ -98,10 +98,8 @@ type laneDeriver struct {
 	end    time.Time
 	rows   []Row
 
-	// stopped says the lane's turn ended and nothing has started a new one, so the time passing is idle rather than
-	// the agent thinking. woken says input has since arrived, which is where the next turn's thinking starts from.
-	stopped bool
-	woken   bool
+	// state says whether the time passing is the lane working or the lane idle.
+	state laneState
 
 	// open holds the calls of the current batch that haven't come back yet, and batch holds the whole batch in the
 	// order it was issued. Both empty out together.
@@ -124,17 +122,17 @@ func (d *laneDeriver) run() []Row {
 				// block that closed it claims none of it.
 				d.emitWait(ts, reason, rec.Line)
 			}
-			d.working()
+			d.state = laneWorking
 			d.emitResponse(rec, ts)
 
 		case rec.Type == transcript.TypeUser && hasToolResults(rec):
-			d.working()
+			d.state = laneWorking
 			d.resolve(rec, ts)
 
 		case rec.Type == transcript.TypeUser && isPrompt(rec):
 			d.flush(ts)
 			d.emitWait(ts, waitInfo(rec), rec.Line)
-			d.working()
+			d.state = laneWorking
 
 		case rec.Type == transcript.TypeQueueOperation && isEnqueue(rec) && len(d.batch) == 0:
 			// Input landing in the queue while no tool call is open. Its timestamp is when the input actually arrived,
@@ -146,10 +144,10 @@ func (d *laneDeriver) run() []Row {
 			// agent is genuinely composing clips a few seconds off the front of that row instead, which is a bounded
 			// error where the other one has no bound.
 			d.emitWait(ts, waitInfo(rec), rec.Line)
-			d.woken = true
+			d.state = lanePending
 
 		case rec.Type == transcript.TypeSystem && rec.System != nil && isTurnEnd(rec.System.Subtype):
-			d.stopped = true
+			d.state = laneIdle
 
 		case rec.Type == transcript.TypeSystem && rec.System != nil && rec.System.Subtype == compactBoundary:
 			d.flush(ts)
@@ -284,17 +282,14 @@ func (d *laneDeriver) flush(ts time.Time) {
 	}
 }
 
-// working marks the lane as busy again, which is what a new turn's first record means.
-func (d *laneDeriver) working() { d.stopped, d.woken = false, false }
-
 // wasIdle says the stretch ending now was the lane sitting idle rather than the model working, and why.
 //
-// There are two ways to tell. The lane's turn ended and no input has arrived since, which is evidence. Or the stretch
-// is longer than a model response can be, which is a backstop for the lanes that carry no evidence at all: a session
-// left after `/exit` and resumed 25 days later has nothing between the two but a text block.
+// There are two ways to tell. The turn ended and nothing has arrived since, which is evidence. Or the stretch is
+// longer than a model response can be, which is the backstop for lanes carrying no evidence at all: a session left
+// after `/exit` and resumed 25 days later has nothing between the two but a text block.
 func (d *laneDeriver) wasIdle(ts time.Time) (string, bool) {
 	switch {
-	case d.stopped && !d.woken:
+	case d.state == laneIdle:
 		return "idle after the turn ended", true
 	case ts.Sub(d.cursor) > d.opts.MaxResponseSpan:
 		return "idle, with nothing on record saying when the lane started working again", true
@@ -364,6 +359,20 @@ func isPrompt(rec *transcript.Record) bool {
 	}
 	return false
 }
+
+// laneState is what the lane was doing when the last record went by, which decides whether the stretch before the next
+// one counts as the model working or as the lane sitting idle.
+type laneState int
+
+const (
+	// laneWorking means the lane is mid-turn: the time passing is the model thinking or a tool running.
+	laneWorking laneState = iota
+	// laneIdle means the turn ended and nothing has arrived since, so the time passing is idle.
+	laneIdle
+	// lanePending means input has arrived and the lane hasn't produced anything yet. It's where the next turn's
+	// thinking starts from, so the stretch after it belongs to the model rather than to the wait.
+	lanePending
+)
 
 // compactBoundary is the system record subtype that marks a finished compaction.
 const compactBoundary = "compact_boundary"
