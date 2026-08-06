@@ -15,7 +15,7 @@ duration. The engine hands back rows plus a span per lane; the CLI writes the CS
 started, and the last ends when the lane ended. Nothing is unaccounted for and nothing is counted twice. The only
 exception is a batch of parallel tool calls, which genuinely overlap, and every row of one says so in `Overlapped`.
 
-The property holds across every session on the machine this was built against: 724 sessions, 4,333 lanes, 857,731 rows,
+The property holds across every session on the machine this was built against: 725 sessions, 4,340 lanes, 862,501 rows,
 no gaps and no negative durations (verified 2026-08-06, `TestRealTimelineSweep`).
 
 ## The activity kinds
@@ -142,7 +142,7 @@ result never arrived has no end to measure, because it was closed at the moment 
 blocks until a person answers (`AskUserQuestion`, `ExitPlanMode`) is **waiting**, not stalled: before that rule existed,
 three of the five stalls in the whole corpus were questions a human took hours to answer.
 
-What's left, over 857,731 rows: two stalls, both a trivial shell command that came back hours later (6h15m and 2h54m).
+What's left, over 862,501 rows: two stalls, both a trivial shell command that came back hours later (6h15m and 2h54m).
 The sweep prints every one it finds, so a wrong call is visible rather than buried in a count.
 
 Reading the command matters as much as the threshold. `until pgrep …; do sleep 3; done` is a poll loop and takes the

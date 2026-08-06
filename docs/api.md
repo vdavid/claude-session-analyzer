@@ -8,8 +8,8 @@ the network, so the address isn't configurable.
 
 ## Conventions
 
-- Every instant is RFC 3339 in UTC. A timestamp that isn't known is `null`, never a zero date: 98 of the 722 sessions on
-  the machine this was built against carry no timestamped record at all.
+- Every instant is RFC 3339 in UTC. A timestamp that isn't known is `null`, never a zero date: 99 of the 725 sessions on
+  the machine this was built against carry no timestamped record at all (verified 2026-08-06).
 - Every duration is seconds, as a number, named `seconds` or `...Seconds`, rounded to the millisecond the transcripts
   are stamped at.
 - A session id can be a prefix, as long as it matches one session. That's the same rule the CLI uses.

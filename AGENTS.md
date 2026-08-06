@@ -110,7 +110,7 @@ decoding, because hand-written fixtures can't catch format drift:
   `CSA_REAL_LIST=1 go test ./internal/session -run RealListing -v`. Takes about a second, and catches a listing that
   reads the wrong end of a file.
 - Every transcript on the machine: `CSA_SWEEP=1 go test ./internal/session -run CorpusSweep -v -timeout 20m`. Takes
-  about 37 s over 4,452 transcripts. A record type appearing in its skip list that isn't in `docs/transcript-format.md`
+  about 85 s over 4,460 transcripts. A record type appearing in its skip list that isn't in `docs/transcript-format.md`
   means the format moved.
 
 The derivation has three of its own, same idea. Run them after changing a rule in `internal/timeline`:
@@ -119,7 +119,7 @@ The derivation has three of its own, same idea. Run them after changing a rule i
 - The two anomalies the tool exists for:
   `CSA_REAL_SESSION_ID=532ac591 go test ./internal/timeline -run RealAnomalies -v`.
 - Every session on the machine: `CSA_SWEEP=1 go test ./internal/timeline -run RealTimelineSweep -v -timeout 30m`. Takes
-  about a minute over 724 sessions, checks the tiling property on all of them, and lists every stall it called.
+  about three minutes over 725 sessions, checks the tiling property on all of them, and lists every stall it called.
 
 The golden file (`internal/timeline/testdata/golden/timeline.csv`) holds the whole derivation to a committed CSV.
 Rewrite it with `go test ./internal/timeline -update` and read the diff before committing it.

@@ -13,7 +13,7 @@ import (
 // a field here means changing that.
 //
 // Every duration is seconds, as a number, named `seconds` or `...Seconds`. Every instant is RFC 3339 in UTC. A
-// timestamp that isn't known is null rather than a zero date, because 98 of the 722 sessions on this machine carry no
+// timestamp that isn't known is null rather than a zero date, because 99 of the 725 sessions on this machine carry no
 // timestamped record at all and 1 January year 1 would be a lie.
 
 type sessionListBody struct {

@@ -45,8 +45,8 @@ go build -o claude-session-analyzer ./cmd/claude-session-analyzer
 ./claude-session-analyzer serve                    # the API alone, on http://127.0.0.1:19427
 ```
 
-A session id can be any prefix that matches one session, which is why `532ac591` works. `sessions` lists 722 sessions
-and 3.5 GB in a quarter of a second, because it reads the two ends of each transcript rather than any of the middle.
+A session id can be any prefix that matches one session, which is why `532ac591` works. `sessions` lists 725 sessions
+and 3.8 GB in well under a second, because it reads the two ends of each transcript rather than any of the middle.
 `--root` points either command somewhere other than the default.
 
 ## The CSV

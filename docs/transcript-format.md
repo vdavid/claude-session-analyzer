@@ -7,6 +7,9 @@ Verification base: a 57 MB multi-agent session (`532ac591-b7c5-45ca-a764-f40f01a
 2026-08-06, Claude Code `2.1.220`), plus samples across 200 random transcripts from a 4,438-transcript corpus spanning
 `2.1.112` (2026-04) to `2.1.220` (2026-08). Dates below are when a claim was last checked.
 
+The corpus grows while it's being measured, so a count taken on one sweep and a count taken on the next differ by a few.
+Each number below carries the base it was measured against; treat them as scale, not as identities to reconcile.
+
 ## Layout on disk
 
 - Sessions live at `~/.claude/projects/<project-slug>/<session-id>.jsonl`. Override the root with `CLAUDE_CONFIG_DIR`
@@ -30,8 +33,8 @@ Verification base: a 57 MB multi-agent session (`532ac591-b7c5-45ca-a764-f40f01a
       treat the directory as opaque and ignore it for timing (verified 2026-08-06 by scanning every record of the
       reference session for the string `tool-results/`).
 - Sibling `.jsonl.wakatime` files come from an unrelated tool. Ignore them.
-- Scale to design for: 4,438 transcripts, 3.8 GB, on one developer's machine after four months. Session listing must not
-  parse bodies.
+- Scale to design for: 4,460 transcripts, 3.8 GB, on one developer's machine after four months (2026-08-06). Session
+  listing must not parse bodies.
 
 ### A session's lanes are not always next to its lead transcript
 
@@ -119,7 +122,7 @@ Not every line is a message. Types seen across the corpus (verified 2026-08-06, 
 - User input queue: `queue-operation`.
 - Workflow journals only: `started`, `result`.
 
-That list is the complete set as of 2026-08-06, from parsing all 4,438 transcripts (1,221,828 lines, 0 malformed). New
+That list is the complete set as of 2026-08-06, from parsing all 4,460 transcripts (1,236,738 lines, 0 malformed). New
 types appear over time (`ai-title`, `relocated`, and `pr-link` are all newer than `2.1.112`), so an unknown `type` must
 be skipped, never treated as an error. `internal/session`'s `TestRealCorpusSweep` re-runs that check on demand and lists
 what it skipped, which is how a new type gets noticed.
