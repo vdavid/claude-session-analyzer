@@ -34,10 +34,12 @@ func TestFindLocatesASessionAndItsSubagentLanes(t *testing.T) {
 		t.Error("dir path should be set when the session has a sibling directory")
 	}
 
+	// Direct subagents first, then the ones a workflow spawned, which sit a level deeper.
 	want := []string{
 		"agent-abuilder-aaaa1111.jsonl",
 		"agent-acccc3333.jsonl",
 		"agent-alegacy-bbbb2222.jsonl",
+		"agent-aworker-dddd4444.jsonl",
 	}
 	if len(loc.SubagentPaths) != len(want) {
 		t.Fatalf("subagent paths = %v, want %d of them", loc.SubagentPaths, len(want))
@@ -45,6 +47,18 @@ func TestFindLocatesASessionAndItsSubagentLanes(t *testing.T) {
 	for i, w := range want {
 		if got := filepath.Base(loc.SubagentPaths[i]); got != w {
 			t.Errorf("subagent %d = %q, want %q (sorted by name)", i, got, w)
+		}
+	}
+}
+
+func TestFindIgnoresAWorkflowJournal(t *testing.T) {
+	loc, err := Find(testRoot(), alphaID)
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	for _, path := range loc.SubagentPaths {
+		if filepath.Base(path) == "journal.jsonl" {
+			t.Errorf("journal.jsonl is a workflow's own log, not an agent lane: %s", path)
 		}
 	}
 }

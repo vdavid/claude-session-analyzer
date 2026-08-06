@@ -16,6 +16,15 @@ Verification base: a 57 MB multi-agent session (`532ac591-b7c5-45ca-a764-f40f01a
 - A session that spawned subagents also has a sibling directory `<session-id>/` holding:
     - `subagents/agent-a<something>.jsonl`: one transcript per subagent lane.
     - `subagents/agent-a<something>.meta.json`: the lane's metadata. Often missing; see below.
+    - `subagents/workflows/wf_<id>/agent-a<something>.jsonl`: the same thing for agents a workflow spawned, one level
+      deeper, with their own `.meta.json` files. These are real lanes doing real work and it's easy to miss them: one
+      session in the corpus holds 977 of them against five direct subagents. Agent transcripts live at exactly these
+      two depths, nowhere else (verified 2026-08-06 across all 3,708 of them).
+    - `subagents/workflows/wf_<id>/journal.jsonl`: the workflow's own log, not a lane. Its records are `started` and
+      `result` (`agentId`, `key`, and for `result` the agent's final report text), none of them timestamped. Taking
+      only `agent-*.jsonl` leaves it out.
+    - `workflows/wf_<id>.json` and `workflows/scripts/*.js`: workflow definitions and the scripts they run. Not
+      transcripts.
     - `tool-results/*.txt`: offloaded large tool outputs. No record in the verified session references these files, so
       treat the directory as opaque and ignore it for timing (verified 2026-08-06 by scanning every record of the
       reference session for the string `tool-results/`).
@@ -54,7 +63,8 @@ back `name` → `agentType` → the file's agent id, and `color` may be empty, s
 
 ## Records
 
-One JSON object per line. Lines get long: 1.36 MB is the longest in the reference session (verified 2026-08-06), so a
+One JSON object per line. Lines get long: 1.36 MB is the longest in the reference session, and 3.42 MB is the longest
+in the whole corpus (verified 2026-08-06), so a
 `bufio.Scanner` at its default 64 KB limit fails on real data. `internal/transcript` reads lines with a growing
 `bufio.Reader` loop instead, with no fixed ceiling.
 
@@ -62,12 +72,15 @@ Not every line is a message. Types seen across the corpus (verified 2026-08-06, 
 
 - Messages: `assistant`, `user`, `attachment`, `system`.
 - Session state, no timestamp on most: `custom-title`, `ai-title`, `agent-name`, `mode`, `permission-mode`,
-  `last-prompt`, `bridge-session`, `worktree-state`, `relocated`, `pr-link`.
+  `agent-setting`, `last-prompt`, `bridge-session`, `worktree-state`, `relocated`, `pr-link`, `fork-context-ref`.
 - File tracking: `file-history-snapshot`, `file-history-delta`.
 - User input queue: `queue-operation`.
+- Workflow journals only: `started`, `result`.
 
+That list is the complete set as of 2026-08-06, from parsing all 4,438 transcripts (1,221,828 lines, 0 malformed).
 New types appear over time (`ai-title`, `relocated`, and `pr-link` are all newer than `2.1.112`), so an unknown `type`
-must be skipped, never treated as an error.
+must be skipped, never treated as an error. `internal/session`'s `TestRealCorpusSweep` re-runs that check on demand
+and lists what it skipped, which is how a new type gets noticed.
 
 ### Fields shared by message records
 

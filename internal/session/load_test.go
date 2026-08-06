@@ -24,8 +24,8 @@ func loadAlpha(t *testing.T) *Session {
 func TestLoadPutsTheLeadFirstThenOneLanePerSubagent(t *testing.T) {
 	s := loadAlpha(t)
 
-	if len(s.Lanes) != 4 {
-		t.Fatalf("lanes = %d, want the lead plus three subagents", len(s.Lanes))
+	if len(s.Lanes) != 5 {
+		t.Fatalf("lanes = %d, want the lead plus three subagents and one workflow agent", len(s.Lanes))
 	}
 	lead := s.Lanes[0]
 	if !lead.IsLead {
@@ -57,6 +57,7 @@ func TestLoadNamesLanesFromMetadataWithFallbacks(t *testing.T) {
 		wantName     string
 		wantColor    string
 		wantMetaFile bool
+		wantWorkflow string
 	}{
 		{
 			name:         "a full meta file gives name and color",
@@ -82,11 +83,23 @@ func TestLoadNamesLanesFromMetadataWithFallbacks(t *testing.T) {
 			wantColor:    "",
 			wantMetaFile: true,
 		},
+		{
+			name:         "a workflow agent is a lane too, tagged with its workflow",
+			laneIndex:    4,
+			wantID:       "aworker-dddd4444",
+			wantName:     "workflow-subagent",
+			wantColor:    "",
+			wantMetaFile: true,
+			wantWorkflow: "wf_abc123",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			lane := s.Lanes[tt.laneIndex]
+			if lane.WorkflowID != tt.wantWorkflow {
+				t.Errorf("workflow id = %q, want %q", lane.WorkflowID, tt.wantWorkflow)
+			}
 			if lane.ID != tt.wantID {
 				t.Errorf("id = %q, want %q", lane.ID, tt.wantID)
 			}

@@ -31,7 +31,8 @@ type Location struct {
 	TranscriptPath string
 	// DirPath is the sibling directory holding subagent lanes, empty when the session spawned none.
 	DirPath string
-	// SubagentPaths are the subagent transcripts, sorted by file name.
+	// SubagentPaths are the subagent transcripts: the ones the session spawned directly, sorted by file name, then the
+	// ones its workflows spawned, sorted by workflow then file name.
 	SubagentPaths []string
 }
 
@@ -115,20 +116,53 @@ func fill(root string, loc Location) (Location, error) {
 	loc.DirPath = sessionDir
 
 	subagentDir := filepath.Join(sessionDir, "subagents")
-	entries, err := os.ReadDir(subagentDir)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return loc, nil
-	case err != nil:
-		return Location{}, fmt.Errorf("read %s: %w", subagentDir, err)
+	direct, err := laneFilesIn(subagentDir)
+	if err != nil {
+		return Location{}, err
 	}
+	loc.SubagentPaths = append(loc.SubagentPaths, direct...)
 
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".jsonl" {
+	// Agents a workflow spawned sit one level deeper, under `subagents/workflows/wf_<id>/`. They're real lanes doing
+	// real work: one session on the machine this was built against holds 977 of them.
+	workflowDirs, err := os.ReadDir(filepath.Join(subagentDir, "workflows"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Location{}, fmt.Errorf("read %s: %w", filepath.Join(subagentDir, "workflows"), err)
+	}
+	var workflow []string
+	for _, entry := range workflowDirs {
+		if !entry.IsDir() {
 			continue
 		}
-		loc.SubagentPaths = append(loc.SubagentPaths, filepath.Join(subagentDir, entry.Name()))
+		lanes, err := laneFilesIn(filepath.Join(subagentDir, "workflows", entry.Name()))
+		if err != nil {
+			return Location{}, err
+		}
+		workflow = append(workflow, lanes...)
 	}
-	sort.Strings(loc.SubagentPaths)
+	sort.Strings(workflow)
+	loc.SubagentPaths = append(loc.SubagentPaths, workflow...)
 	return loc, nil
+}
+
+// laneFilesIn lists the agent transcripts directly inside dir, sorted. It takes only `agent-*.jsonl`, which leaves out
+// a workflow's `journal.jsonl`: that's the workflow's own log of what it started and what came back, not a lane.
+func laneFilesIn(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("read %s: %w", dir, err)
+	}
+
+	var paths []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, "agent-") || filepath.Ext(name) != ".jsonl" {
+			continue
+		}
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	sort.Strings(paths)
+	return paths, nil
 }

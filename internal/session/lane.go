@@ -20,6 +20,8 @@ type Lane struct {
 	IsLead bool
 	Path   string
 	Meta   AgentMeta
+	// WorkflowID names the workflow that spawned this lane, empty when the session spawned it directly.
+	WorkflowID string
 
 	// Records are every decoded record in the transcript, in file order.
 	Records []*transcript.Record
@@ -47,6 +49,16 @@ type AgentMeta struct {
 // metadata.
 func agentIDFromPath(path string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(filepath.Base(path), ".jsonl"), "agent-")
+}
+
+// workflowIDFromPath returns the workflow a lane belongs to, read from `subagents/workflows/<workflow-id>/agent-*`,
+// and empty for a lane the session spawned directly.
+func workflowIDFromPath(path string) string {
+	dir, parent := filepath.Split(filepath.Dir(path))
+	if filepath.Base(filepath.Clean(dir)) != "workflows" {
+		return ""
+	}
+	return parent
 }
 
 // readAgentMeta reads the `.meta.json` sitting next to a subagent transcript. A missing, unreadable, or undecodable

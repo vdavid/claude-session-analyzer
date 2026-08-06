@@ -48,6 +48,7 @@ func Load(loc Location, opts transcript.Options) (*Session, error) {
 			return nil, err
 		}
 		lane.ID = agentIDFromPath(path)
+		lane.WorkflowID = workflowIDFromPath(path)
 		lane.Meta = readAgentMeta(path)
 		lane.Name = laneName(lane.Meta, lane.ID)
 		s.Lanes = append(s.Lanes, lane)
