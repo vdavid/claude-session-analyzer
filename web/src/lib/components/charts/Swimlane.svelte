@@ -31,6 +31,16 @@
     const CHART_CHROME = 86
 
     const palette = $derived(theme.palette)
+
+    /**
+     * The time window the reader scrubbed to, kept outside the option.
+     *
+     * Opening a workflow changes the rows, which rebuilds the option, and `notMerge` would otherwise
+     * throw the zoom away: scrub to an interesting hour, open the workflow that ran in it, and you're
+     * back at three days wide. ECharts doesn't emit `dataZoom` for a programmatic `setOption`, so
+     * feeding this back in can't loop.
+     */
+    let window = $state({ start: 0, end: 100 })
     const visibleRows = $derived(Math.min(Math.max(rows.length, 1), MAX_VISIBLE_ROWS))
     const scrolls = $derived(rows.length > MAX_VISIBLE_ROWS)
     const height = $derived(`${visibleRows * ROW_HEIGHT + CHART_CHROME}px`)
@@ -155,6 +165,8 @@
                 type: 'inside',
                 xAxisIndex: 0,
                 filterMode: 'none',
+                start: window.start,
+                end: window.end,
                 // Plain wheel keeps scrolling the page. Ctrl and pinch zoom time, drag pans it.
                 zoomOnMouseWheel: 'ctrl',
                 moveOnMouseWheel: false,
@@ -164,6 +176,8 @@
                 type: 'slider',
                 xAxisIndex: 0,
                 filterMode: 'none',
+                start: window.start,
+                end: window.end,
                 height: 22,
                 bottom: 14,
                 borderColor: palette.chrome.border,
@@ -238,6 +252,14 @@
         click: (params: any) => {
             const bar = (params.seriesIndex === 0 ? gapBars : busyBars)[params.dataIndex]
             if (bar?.row.expandable && bar.row.workflowId) onToggleWorkflow?.(bar.row.workflowId)
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- so is this one.
+        dataZoom: (params: any) => {
+            // A wheel or a drag reports the window inline; the slider reports it in `batch`.
+            const moved = params.batch?.[0] ?? params
+            if (typeof moved.start === 'number' && typeof moved.end === 'number') {
+                window = { start: moved.start, end: moved.end }
+            }
         },
     }
 </script>

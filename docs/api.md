@@ -138,7 +138,9 @@ questions, and presenting one as the other is the mistake this API is shaped to 
 breakdown of **lane time**, so say so in the legend.
 
 `totals.from` and `totals.until` bracket every lane, so they can sit slightly outside the session's own `start` and
-`end`, which are the lead's alone. On the reference session a subagent outlives the lead by 20 minutes.
+`end`, which are the lead's alone. On the reference session a subagent outlives the lead by 20 minutes. Both are `null`
+on a session whose records carry no timestamp, which is 99 of the 725 on this machine, and `totals.rows` is `0` there:
+a consumer that draws a timeline has nothing to draw.
 
 ### Lanes and gaps
 
