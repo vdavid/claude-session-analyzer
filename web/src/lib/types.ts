@@ -73,6 +73,8 @@ export interface TimelineRow {
     info: string
     tool?: string
     class?: string
+    /** Which slice of the tool breakdown the row belongs to. Only there alongside `tool`. */
+    toolGroup?: string
     overlapped?: boolean
     timedOut?: boolean
     isError?: boolean
@@ -92,6 +94,42 @@ export interface TimelineTotals {
     lanes: number
     /** Only the kinds with rows behind them, in the order a legend should show them. */
     byKind: KindTotal[]
+    /** The tool breakdown, most calls first. Empty on a session that never called a tool. */
+    byTool: ToolGroupTotal[]
+}
+
+/**
+ * One slice of the tool breakdown: everything a session did with one tool, at the level a reader
+ * asks about. `Bash` arrives split by what the command was doing and an MCP server's methods arrive
+ * collapsed into the server, so the groups are `Bash (git)`, `codegraph (MCP)`, `Read`.
+ *
+ * The counts are calls, not rows: every call leaves a row for composing it and a row for running it,
+ * and only the second is counted.
+ */
+export interface ToolGroupTotal {
+    group: string
+    /** What kind of work the group does. `classes.ts` turns it into the colour and the family. */
+    class: string
+    calls: number
+    seconds: number
+    /** How many lanes reached for it, which is the answer to "who used this". */
+    lanes: number
+    errors?: number
+    timedOut?: number
+    /** The exact tools inside the group, most calls first. */
+    tools: ToolTotal[]
+}
+
+export interface ToolTotal {
+    /** The raw name the harness used, so a reader can grep a transcript for it. */
+    tool: string
+    /** The part that varies inside the group: an MCP method, or the program a Bash call ran. */
+    leaf: string
+    calls: number
+    seconds: number
+    lanes: number
+    errors?: number
+    timedOut?: number
 }
 
 export interface TimelineResponse {

@@ -15,9 +15,12 @@
     import KindLegend from '$lib/components/KindLegend.svelte'
     import Notice from '$lib/components/Notice.svelte'
     import StatRail from '$lib/components/StatRail.svelte'
+    import ToolLegend from '$lib/components/ToolLegend.svelte'
     import ConcurrencyTrace from '$lib/components/charts/ConcurrencyTrace.svelte'
     import KindPie from '$lib/components/charts/KindPie.svelte'
     import Swimlane from '$lib/components/charts/Swimlane.svelte'
+    import ToolPie from '$lib/components/charts/ToolPie.svelte'
+    import { familyStyle } from '$lib/classes'
     import {
         formatBytes,
         formatCount,
@@ -27,9 +30,11 @@
         instantMs,
         shortId,
     } from '$lib/format'
+    import { theme } from '$lib/theme.svelte'
     import { concurrencyTrace } from '$lib/transform/concurrency'
     import { bandTotals, kindSlices } from '$lib/transform/pie'
     import { buildSwimlane } from '$lib/transform/swimlane'
+    import { toolBreakdown } from '$lib/transform/tools'
     import type { TimelineResponse } from '$lib/types'
 
     let aggregates = $state<TimelineResponse | null>(null)
@@ -111,9 +116,27 @@
     const kinds = $derived(slices.map((s) => s.kind))
     let highlight = $state<number | null>(null)
 
+    const tools = $derived(toolBreakdown(totals?.byTool ?? []))
+    let toolHighlight = $state<number | null>(null)
+    /** The group the sheet is filtered to. Set by a click on a slice or a legend row. */
+    let toolFilter = $state('')
+    let sheet = $state<HTMLElement | null>(null)
+
     function toggleWorkflow(id: string) {
         if (expanded.has(id)) expanded.delete(id)
         else expanded.add(id)
+    }
+
+    /**
+     * Filtering the sheet from up here only helps if the sheet is where the reader ends up, and it's
+     * two screens down. Clicking the group that's already showing clears it, so the same click undoes
+     * itself.
+     */
+    function showTool(group: string) {
+        toolFilter = toolFilter === group ? '' : group
+        if (toolFilter) {
+            sheet?.scrollIntoView({ behavior: theme.reducedMotion ? 'auto' : 'smooth', block: 'start' })
+        }
     }
 
     const stats = $derived(
@@ -294,7 +317,68 @@
             {/if}
         </section>
 
-        <section class="rise mt-10" style:--rise-delay="220ms" aria-labelledby="sheet-heading">
+        {#if tools.slices.length}
+            <section class="rise mt-10" style:--rise-delay="200ms" aria-labelledby="tools-heading">
+                <h2 id="tools-heading" class="text-xl font-semibold tracking-tight text-ink">
+                    What the agents reached for
+                </h2>
+                <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
+                    {formatCount(tools.calls)} tool
+                    {tools.calls === 1 ? 'call' : 'calls'} across every lane, counted as calls rather than as time: a checker
+                    run costs minutes and a lookup costs a second, so seconds would say what the machine was busy with rather
+                    than what the agents did.
+                    {#if tools.busiest}
+                        The busiest is <strong class="font-medium text-ink">{tools.busiest.group}</strong>, at
+                        {formatCount(tools.busiest.calls)} calls ({formatShare(tools.busiest.calls, tools.calls)}).
+                    {/if}
+                    Pick one to filter the sheet below to its rows.
+                </p>
+
+                <div class="card mt-4 p-5">
+                    <ul class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                        {#each tools.families as family (family.family)}
+                            {@const style = familyStyle(family.family)}
+                            <li class="flex items-center gap-1.5 text-xs" title={style.description}>
+                                <span
+                                    class="size-2.5 shrink-0 rounded-[3px]"
+                                    style:background-color={`var(${style.cssVar})`}
+                                ></span>
+                                <span class="text-ink-muted">{style.label}</span>
+                                <span class="tnum font-mono text-ink-faint">
+                                    {formatShare(family.calls, tools.calls)}
+                                </span>
+                            </li>
+                        {/each}
+                    </ul>
+
+                    <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-8">
+                        <div class="lg:sticky lg:top-20 lg:self-start">
+                            <ToolPie
+                                slices={tools.slices}
+                                calls={tools.calls}
+                                highlight={toolHighlight}
+                                onSelect={showTool}
+                            />
+                        </div>
+                        <ToolLegend
+                            slices={tools.slices}
+                            calls={tools.calls}
+                            selected={toolFilter}
+                            onHover={(index) => (toolHighlight = index)}
+                            onSelect={showTool}
+                        />
+                    </div>
+                </div>
+
+                <p class="mt-2 text-xs text-ink-faint">
+                    Tool time is the wall clock between a call and its result, so it counts whatever the tool waited on,
+                    a permission prompt included. Calls that ran in parallel each count their own, the same way lane
+                    time does.
+                </p>
+            </section>
+        {/if}
+
+        <section class="rise mt-10" style:--rise-delay="220ms" aria-labelledby="sheet-heading" bind:this={sheet}>
             <h2 id="sheet-heading" class="text-xl font-semibold tracking-tight text-ink">Every row</h2>
             <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
                 One row per stretch of one lane's clock, tiling that lane end to end. The lead's row is the same shape
@@ -303,7 +387,7 @@
 
             <div class="mt-4">
                 {#if full?.rows}
-                    <DataSheet rows={full.rows} {lanes} {kinds} />
+                    <DataSheet rows={full.rows} {lanes} {kinds} bind:toolFilter />
                 {:else if rowsFailure}
                     {@const described = describeApiError(rowsFailure)}
                     <div class="max-w-2xl">

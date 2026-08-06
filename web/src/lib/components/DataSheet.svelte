@@ -33,9 +33,14 @@
         rows: TimelineRow[]
         lanes: Lane[]
         kinds: string[]
+        /**
+         * The tool group to show, bound so the breakdown above can drive it: clicking a slice up
+         * there is the same act as picking one from the dropdown down here.
+         */
+        toolFilter?: string
     }
 
-    const { rows, lanes, kinds }: Props = $props()
+    let { rows, lanes, kinds, toolFilter = $bindable('') }: Props = $props()
 
     const ROW_HEIGHT = 30
     const VIEWPORT_HEIGHT = 560
@@ -62,13 +67,21 @@
     )
     let classFilter = $state('')
 
-    /** Narrowed before the table sees them: three exact-match dropdowns are cheaper as a filter. */
+    /** The groups this session actually has rows for, so the dropdown can't offer an empty result. */
+    const toolGroups = $derived(
+        [...new Set(rows.map((r) => r.toolGroup).filter((g): g is string => Boolean(g)))].sort((a, b) =>
+            a.localeCompare(b),
+        ),
+    )
+
+    /** Narrowed before the table sees them: four exact-match dropdowns are cheaper as a filter. */
     const visibleRows = $derived(
         rows.filter(
             (r) =>
                 (!kindFilter || r.kind === kindFilter) &&
                 (!laneFilter || r.laneId === laneFilter) &&
-                (!classFilter || r.class === classFilter),
+                (!classFilter || r.class === classFilter) &&
+                (!toolFilter || r.toolGroup === toolFilter),
         ),
     )
 
@@ -150,6 +163,7 @@
         void kindFilter
         void laneFilter
         void classFilter
+        void toolFilter
         scroller?.scrollTo({ top: 0 })
     })
 
@@ -165,6 +179,7 @@
         kindFilter = ''
         laneFilter = ''
         classFilter = ''
+        toolFilter = ''
     }
 
     const filtered = $derived(modelRows.length !== rows.length)
@@ -191,6 +206,19 @@
             <option value="">Every kind</option>
             {#each kinds as kind (kind)}
                 <option value={kind}>{kind}</option>
+            {/each}
+        </select>
+    </label>
+
+    <label>
+        <span class="eyebrow block pb-1">Tool</span>
+        <select
+            bind:value={toolFilter}
+            class="w-44 rounded-md border border-border-base bg-surface px-2 py-1.5 text-sm text-ink"
+        >
+            <option value="">Every tool</option>
+            {#each toolGroups as group (group)}
+                <option value={group}>{group}</option>
             {/each}
         </select>
     </label>

@@ -133,17 +133,3 @@ export function byLegendOrder<T extends { kind: string }>(items: readonly T[]): 
     const rank = new Map<string, number>(KIND_ORDER.map((k, i) => [k, i]))
     return [...items].sort((a, b) => (rank.get(a.kind) ?? 99) - (rank.get(b.kind) ?? 99))
 }
-
-/**
- * Reads every kind's colour out of the stylesheet. ECharts needs literal colours rather than
- * `var(…)`, and the theme follows `prefers-color-scheme`, so the charts re-read this when the
- * media query flips.
- */
-export function readKindColors(el: Element = document.documentElement): Record<string, string> {
-    const styles = getComputedStyle(el)
-    const colors: Record<string, string> = {}
-    for (const kind of KIND_ORDER) {
-        colors[kind] = styles.getPropertyValue(kindStyle(kind).cssVar).trim()
-    }
-    return colors
-}
