@@ -12,6 +12,20 @@ import (
 	"github.com/vdavid/claude-session-analyzer/internal/transcript"
 )
 
+// kindWidth is how wide the kind column has to be for the tables below to line up: the longest kind name plus a space.
+// These are the tables a person reads, so they're worth keeping legible as the kinds change.
+var kindWidth = widestKind()
+
+func widestKind() int {
+	widest := 0
+	for _, kind := range Kinds {
+		if len(kind) > widest {
+			widest = len(kind)
+		}
+	}
+	return widest
+}
+
 // TestRealTimeline derives a session that's actually on this machine and reports where its time went. Hand-built
 // fixtures can't catch a rule that's wrong about real data, so run this after touching any of them:
 //
@@ -35,9 +49,9 @@ func TestRealTimeline(t *testing.T) {
 	t.Log("where the time went, summed across lanes running in parallel:")
 	for _, kind := range Kinds {
 		d := totals[kind]
-		t.Logf("  %-16s %12s  %5.1f%%", kind, FormatDuration(d), 100*d.Seconds()/sum.Seconds())
+		t.Logf("  %-*s %12s  %5.1f%%", kindWidth, kind, FormatDuration(d), 100*d.Seconds()/sum.Seconds())
 	}
-	t.Logf("  %-16s %12s", "total", FormatDuration(sum))
+	t.Logf("  %-*s %12s", kindWidth, "total", FormatDuration(sum))
 
 	byLane := map[string]time.Duration{}
 	for _, r := range tl.Rows {
@@ -74,7 +88,7 @@ func TestRealTimeline(t *testing.T) {
 	longest := append([]Row(nil), tl.Rows...)
 	sort.Slice(longest, func(i, j int) bool { return longest[i].Duration() > longest[j].Duration() })
 	for _, r := range longest[:min(10, len(longest))] {
-		t.Logf("  %-16s %-24s %10s  %s", r.Kind, r.Agent, FormatDuration(r.Duration()), clip(r.Info, 120))
+		t.Logf("  %-*s %-24s %10s  %s", kindWidth, r.Kind, r.Agent, FormatDuration(r.Duration()), clip(r.Info, 120))
 	}
 
 	t.Logf("timed-out calls: %d", countIf(tl, func(r Row) bool { return r.TimedOut }))
@@ -206,7 +220,7 @@ func TestRealTimelineSweep(t *testing.T) {
 
 	t.Logf("%d sessions, %d lanes, %d rows in %s", sessions, lanes, rows, time.Since(start).Round(time.Second))
 	for _, kind := range Kinds {
-		t.Logf("  %-16s %8d rows", kind, kinds[kind])
+		t.Logf("  %-*s %8d rows", kindWidth, kind, kinds[kind])
 	}
 	t.Log("stalls by class, which is where a threshold that defames honest work shows up:")
 	for class, n := range stalls {
@@ -215,8 +229,8 @@ func TestRealTimelineSweep(t *testing.T) {
 	t.Log("the longest row of each kind, which is where a rule that mislabels a long gap shows up:")
 	for _, kind := range Kinds {
 		if r, ok := longest[kind]; ok {
-			t.Logf("  %-16s %10s  %s %-20s %s", kind, FormatDuration(r.Duration()), longestIn[kind], r.Agent,
-				clip(r.Info, 110))
+			t.Logf("  %-*s %10s  %s %-20s %s", kindWidth, kind, FormatDuration(r.Duration()), longestIn[kind],
+				r.Agent, clip(r.Info, 110))
 		}
 	}
 	t.Log("every stall in the corpus, so a wrong call is visible rather than buried in a count:")

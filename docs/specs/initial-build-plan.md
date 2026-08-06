@@ -306,7 +306,30 @@ What this turned up:
    instead. 241 rows across the corpus now say `API error`, the longest 1h19m.
 3. **The transcript never records a retry.** No transcript holds two error records in a row, so the gap before one is
    the only measure of an outage there is, and the span is capped at two hours rather than trusted.
-4. **452 subagent lanes are invisible to the tool**, in 57 sessions. A session that entered a git worktree keeps its
-   lead transcript under the original project slug while its `<session-id>/subagents/` directory is written under the
-   worktree's slug, and `session.Find` only reads the directory sitting next to the lead. Everything those lanes did is
-   missing from their session's timeline. Worth fixing, and not part of this change.
+4. **452 subagent lanes were invisible to the tool.** A session that entered a git worktree keeps its lead transcript
+   under the original project slug while its `<session-id>/subagents/` directory is written under the worktree's slug,
+   and `session.Find` only read the directory sitting next to the lead. Fixed, below.
+
+**Worktree lanes are found now.** Discovery ties a directory to a session by the directory's **name** rather than by
+the slug around it, and a lane is its path inside a session directory rather than the file it sits in. Layout facts and
+their evidence: `docs/transcript-format.md`.
+
+What this turned up:
+
+1. **It's 31 sessions, not the 57 the note above guessed.** 452 lane files sit under a slug holding no lead transcript,
+   spread over 67 directories, but only 31 sessions actually gained lanes: seven of those directories hold no agent
+   transcript at all. Counted by scanning every directory under the root, 2026-08-06.
+2. **A lane can be split across slugs, and the pieces interleave.** Seven lanes in the corpus were written under two or
+   three slugs as the session moved. They share no records, so nothing was being counted twice, but the fragments
+   interleave in time: concatenating them in slug order puts records before the ones they answer, on four of the seven.
+   `Load` merges them with a k-way merge that leaves each fragment's own order alone, which reproduces the `parentUuid`
+   chain exactly on all seven. Reading them as separate lanes would also have handed the UI two lanes carrying one
+   `laneId`, which is the key `docs/api.md` tells it to group by.
+3. **The corpus grew by more than the lane count suggests.** 3,890 lanes became 4,333 (452 files, less the nine that
+   are fragments of a lane already found), and 781,246 rows became 857,731. Four more `API error` rows turned up in the
+   blind spot, 241 to 245. All 724 sessions still tile, and all 444 lanes found under another slug sit inside their
+   lead's lifetime: not one starts before it or ends after it.
+4. **`TestRealTimeline`'s "working" column is wrong, and was before this change.** It sums row durations keyed by
+   `r.Agent`, so lanes sharing a name (23 of them called `general-purpose` in session `9a4d3375`) each report the whole
+   group's total: "alive 1m17s, working 4h00m". `docs/timeline-rules.md` already says to group by `LaneID`, not by
+   `Agent`. Left alone deliberately, since it's outside this change; it's a one-line fix in the test.

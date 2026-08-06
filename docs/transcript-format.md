@@ -13,7 +13,8 @@ Verification base: a 57 MB multi-agent session (`532ac591-b7c5-45ca-a764-f40f01a
   (the parser reads `$CLAUDE_CONFIG_DIR/projects` when that's set).
 - The slug is the project path with `/` and `.` replaced by `-`, which is lossy: `/tmp/a.b` and `/tmp/a/b` collide.
   Don't invert it. Read `cwd` off any record instead.
-- A session that spawned subagents also has a sibling directory `<session-id>/` holding:
+- A session that spawned subagents also has a directory `<session-id>/`, next to the lead transcript or under
+  another slug (see below), holding:
     - `subagents/agent-a<something>.jsonl`: one transcript per subagent lane.
     - `subagents/agent-a<something>.meta.json`: the lane's metadata. Often missing; see below.
     - `subagents/workflows/wf_<id>/agent-a<something>.jsonl`: the same thing for agents a workflow spawned, one level
@@ -31,6 +32,38 @@ Verification base: a 57 MB multi-agent session (`532ac591-b7c5-45ca-a764-f40f01a
 - Sibling `.jsonl.wakatime` files come from an unrelated tool. Ignore them.
 - Scale to design for: 4,438 transcripts, 3.8 GB, on one developer's machine after four months. Session listing must
   not parse bodies.
+
+### A session's lanes are not always next to its lead transcript
+
+The slug a lane is written under is the directory the session is in **at the time**, not the one it started in. So a
+session that enters a git worktree keeps its lead transcript where it started while `<session-id>/subagents/` appears
+under the worktree's slug, and a session that moved several times has a directory under several slugs, up to 12
+(verified 2026-08-06). 452 lane files on this machine sit under a slug holding no lead transcript, in 31 sessions, and
+they're disproportionately the big multi-agent efforts.
+
+What ties a directory to a session is its **name**, not the slug around it:
+
+- A session id names exactly one session across the whole root: 724 lead transcripts, no id under two slugs.
+- Every uuid-named directory in the corpus has a lead transcript somewhere. The only directory under a slug that isn't
+  named after a session is `memory`.
+- 400 of 400 sampled lane files under a non-lead slug carry the directory's name as their `sessionId`, which is the
+  parent session's id, so the records confirm the tie rather than the slug's shape suggesting it.
+
+(All four verified 2026-08-06 by scanning every directory under the root.)
+
+### A lane can be split across several of them
+
+The harness appends to whichever directory the session is in and switches back and forth, so one lane arrives as two or
+three fragments carrying the same name under different slugs. Seven lanes in the corpus are split, one of them three
+ways (verified 2026-08-06).
+
+The fragments share no records, and they **interleave in time**: one lane's middle fragment spans 19:54:32 to 20:03:52
+while a third runs 19:54:39 to 19:56:22 inside it. Merging them by timestamp reproduces the `parentUuid` chain exactly
+on all seven (one head, no record before its parent), while concatenating them in slug order breaks it on four. So a
+lane is its path inside a session directory (`subagents/agent-<id>.jsonl`), not the file it sits in: the same path
+under two slugs is one lane in two pieces, and reading it as two lanes hands back two lanes carrying one agent id.
+
+Only the fragment under the slug the lane started in carries the `.meta.json`.
 
 ### Subagent file names are not parseable
 
@@ -248,6 +281,7 @@ derive it from the surrounding stamps.
 ### Session-level facts
 
 - A session's own records claim several `cwd` values when the session entered a git worktree: `worktree-state` and
-  `relocated` records record the move. The first record's `cwd` is the original project directory.
+  `relocated` records record the move. The first record's `cwd` is the original project directory, and the move is also
+  what scatters the session's lanes across slugs (see the layout section above).
 - Both the lead transcript and its subagent transcripts keep appending while the session is live, so a parse is a
   snapshot. Nothing marks a lane as finished.
