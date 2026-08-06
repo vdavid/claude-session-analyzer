@@ -16,7 +16,8 @@ const subjectLimit = 110
 
 // subjectKeys are the tool input fields that say what a call was about, most telling first. Reading them in order
 // means one rule covers every tool, including MCP tools nobody has seen yet.
-var subjectKeys = []string{"command", "file_path", "path", "pattern", "query", "url", "prompt", "description"}
+// `pattern` comes before the paths because a search is about what it looked for; the paths are where it looked.
+var subjectKeys = []string{"command", "pattern", "file_path", "path", "query", "url", "prompt", "description"}
 
 // subjectOf pulls the short phrase that names what a call was doing.
 func subjectOf(b transcript.Block) string {

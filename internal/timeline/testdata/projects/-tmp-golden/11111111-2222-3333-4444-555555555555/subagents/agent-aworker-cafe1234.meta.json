@@ -1,0 +1,1 @@
+{"agentType": "general-purpose", "description": "Bring the app up and build", "name": "worker", "spawnDepth": 0, "model": "claude-opus-5", "taskKind": "in_process_teammate", "teamName": "team-golden", "color": "blue"}
