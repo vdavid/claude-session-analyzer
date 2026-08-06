@@ -119,8 +119,9 @@ func TestLoadMergesALaneSplitAcrossSlugsIntoOneOrderedLane(t *testing.T) {
 	}
 }
 
-// TestLoadReadsMetadataFromWhicheverFragmentCarriesIt covers a lane whose `.meta.json` was written under one slug while
-// the records carry on under another.
+// TestLoadReadsMetadataFromWhicheverFragmentCarriesIt covers the two ways a lane's `.meta.json` turns up: beside a lane
+// written wholly under the worktree's slug, and beside one fragment of a split lane. Exactly one fragment carries it
+// and which one isn't predictable, so the split lane's sits beside the fragment that isn't first in path order.
 func TestLoadReadsMetadataFromWhicheverFragmentCarriesIt(t *testing.T) {
 	loc, err := Find(worktreeRoot(), worktreeID)
 	if err != nil {
@@ -131,19 +132,23 @@ func TestLoadReadsMetadataFromWhicheverFragmentCarriesIt(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 
+	want := map[string]string{"away-2222": "away", "ahome-1111": "home"}
 	for _, lane := range s.Lanes {
-		if lane.ID != "away-2222" {
+		wantName, ok := want[lane.ID]
+		if !ok {
 			continue
 		}
-		if lane.Name != "away" {
-			t.Errorf("name = %q, want the metadata's name", lane.Name)
+		if lane.Name != wantName {
+			t.Errorf("lane %s is called %q, want the metadata's name %q", lane.ID, lane.Name, wantName)
 		}
-		if lane.Meta.Model != "claude-opus-5" {
-			t.Errorf("model = %q, want the metadata's", lane.Meta.Model)
+		if !lane.Meta.Present {
+			t.Errorf("lane %s reports no metadata", lane.ID)
 		}
-		return
+		delete(want, lane.ID)
 	}
-	t.Errorf("no lane for the worktree-only agent: %v", laneNames(s))
+	for id := range want {
+		t.Errorf("no lane for %s: %v", id, laneNames(s))
+	}
 }
 
 func TestLoadKeepsAWorkflowLaneWrittenUnderAnotherSlug(t *testing.T) {

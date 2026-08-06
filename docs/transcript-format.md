@@ -63,7 +63,8 @@ on all seven (one head, no record before its parent), while concatenating them i
 lane is its path inside a session directory (`subagents/agent-<id>.jsonl`), not the file it sits in: the same path
 under two slugs is one lane in two pieces, and reading it as two lanes hands back two lanes carrying one agent id.
 
-Only the fragment under the slug the lane started in carries the `.meta.json`.
+Exactly one fragment carries the `.meta.json`, and which one isn't predictable, so read the lane's metadata off
+whichever of its files has one (verified 2026-08-06 across all seven split lanes).
 
 ### Subagent file names are not parseable
 

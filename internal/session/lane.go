@@ -62,9 +62,9 @@ func workflowIDFromPath(rel string) string {
 }
 
 // readAgentMeta reads the `.meta.json` sitting next to a subagent transcript, taking the first of the lane's files that
-// has one: a lane split across project slugs carries its metadata under the slug it started in. A missing, unreadable,
-// or undecodable one isn't an error: plenty of lanes have none, and a lane without metadata still has all its records.
-// It costs a label, nothing more.
+// has one: a lane split across project slugs carries its metadata beside exactly one of its fragments, and which one
+// isn't predictable. A missing, unreadable, or undecodable one isn't an error: plenty of lanes have none, and a lane
+// without metadata still has all its records. It costs a label, nothing more.
 func readAgentMeta(transcriptPaths []string) AgentMeta {
 	for _, transcriptPath := range transcriptPaths {
 		raw, err := os.ReadFile(strings.TrimSuffix(transcriptPath, ".jsonl") + ".meta.json")
