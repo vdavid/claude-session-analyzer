@@ -99,6 +99,9 @@ an argument, either a scope (`pnpm check go`, `web`, `docs`) or a gate name (`pn
 `prettier` formats the whole repo from the root config, markdown included, so a doc reflows to 120 columns on
 `pnpm format`. Don't hand-wrap prose against it.
 
+CI (`.github/workflows/ci.yml`) runs that same `pnpm check` on every push to `main` and every pull request, with Go,
+Node, and pnpm coming from `.mise.toml`, so a green laptop and a green run mean the same thing.
+
 A green run is not evidence a page works. Drive the app against a real session before calling frontend work done.
 
 Three more tests read transcripts off this machine, so they skip by default. Run them after anything that touches

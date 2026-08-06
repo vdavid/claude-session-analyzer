@@ -1,0 +1,30 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+    check:
+        name: Check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            # Go, Node, and pnpm all come from `.mise.toml`, so CI and a laptop run the same versions.
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4
+
+            - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+              with:
+                  path: ~/.local/share/pnpm/store/v3
+                  key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-pnpm-
+
+            - run: pnpm install --frozen-lockfile
+
+            # The same command a laptop runs. It stops at the first failing gate and prints its
+            # output in full, so a red run reads the same way locally and here.
+            - run: pnpm check
