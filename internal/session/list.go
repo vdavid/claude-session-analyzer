@@ -79,6 +79,11 @@ func List(root string) ([]Summary, error) {
 	}
 	var jobs []job
 
+	// Directories named after a session hold its lanes, and they don't have to sit next to the lead transcript: a
+	// session that entered a git worktree writes them under the worktree's slug. Collecting them during the same scan
+	// costs nothing, and it's the only way the lanes get counted.
+	dirs := map[string][]string{}
+
 	for _, slug := range slugs {
 		if !slug.IsDir() {
 			continue
@@ -90,7 +95,11 @@ func List(root string) ([]Summary, error) {
 		}
 		for _, entry := range entries {
 			name := entry.Name()
-			if entry.IsDir() || filepath.Ext(name) != ".jsonl" {
+			if entry.IsDir() {
+				dirs[name] = append(dirs[name], filepath.Join(dir, name))
+				continue
+			}
+			if filepath.Ext(name) != ".jsonl" {
 				continue
 			}
 			info, err := entry.Info()
@@ -129,7 +138,7 @@ func List(root string) ([]Summary, error) {
 					j.summary.Start = ends.Start
 					j.summary.End = ends.End
 				}
-				subagents, laneBytes := countLanes(strings.TrimSuffix(j.path, ".jsonl"))
+				subagents, laneBytes := countLanes(dirs[j.summary.ID])
 				j.summary.Subagents = subagents
 				j.summary.Bytes += laneBytes
 			}
@@ -165,7 +174,7 @@ func Summarize(loc Location) (Summary, error) {
 	s.Modified = info.ModTime()
 	s.Bytes = info.Size()
 
-	subagents, laneBytes := countLanes(strings.TrimSuffix(loc.TranscriptPath, ".jsonl"))
+	subagents, laneBytes := countLanes(loc.DirPaths)
 	s.Subagents = subagents
 	s.Bytes += laneBytes
 	return s, nil
@@ -370,41 +379,60 @@ func hasTitle(recs []*transcript.Record) bool {
 	return false
 }
 
-// countLanes counts a session's subagent transcripts and adds up their size, reading directory entries only. sessionDir
-// is the sibling directory named after the session; most sessions have none.
-func countLanes(sessionDir string) (count int, bytes int64) {
-	count, bytes = laneEntriesIn(filepath.Join(sessionDir, "subagents"))
-
-	workflows := filepath.Join(sessionDir, "subagents", "workflows")
-	entries, err := os.ReadDir(workflows)
-	if err != nil {
-		return count, bytes
+// countLanes counts a session's subagent lanes and adds up what they cost on disk, reading directory entries only.
+// dirs are the directories named after the session; most sessions have none, and a session that entered a git worktree
+// has several.
+//
+// A lane written under two slugs is one lane in two pieces, so the count is of distinct lane paths while the size is of
+// every file: a listing that counted the pieces would disagree with the lanes a parse hands back.
+func countLanes(dirs []string) (count int, bytes int64) {
+	if len(dirs) == 0 {
+		return 0, 0
 	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		n, b := laneEntriesIn(filepath.Join(workflows, entry.Name()))
-		count += n
-		bytes += b
+	seen := make(map[string]bool)
+	for _, dir := range dirs {
+		eachLaneEntry(dir, func(rel string, size int64) {
+			bytes += size
+			if !seen[rel] {
+				seen[rel] = true
+				count++
+			}
+		})
 	}
 	return count, bytes
 }
 
-// laneEntriesIn counts the agent transcripts directly inside dir and adds up their size.
-func laneEntriesIn(dir string) (count int, bytes int64) {
+// eachLaneEntry visits every agent transcript in one session directory, handing over the lane's path inside that
+// directory and the file's size. An unreadable directory is one a session doesn't have.
+func eachLaneEntry(sessionDir string, visit func(rel string, size int64)) {
+	subagents := filepath.Join(sessionDir, "subagents")
+	visitLaneEntries(subagents, sessionDir, visit)
+
+	workflows := filepath.Join(subagents, "workflows")
+	entries, err := os.ReadDir(workflows)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			visitLaneEntries(filepath.Join(workflows, entry.Name()), sessionDir, visit)
+		}
+	}
+}
+
+func visitLaneEntries(dir, sessionDir string, visit func(rel string, size int64)) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return 0, 0
+		return
 	}
 	for _, entry := range entries {
 		if entry.IsDir() || !isLaneFile(entry.Name()) {
 			continue
 		}
-		count++
+		var size int64
 		if info, err := entry.Info(); err == nil {
-			bytes += info.Size()
+			size = info.Size()
 		}
+		visit(rel(sessionDir, filepath.Join(dir, entry.Name())), size)
 	}
-	return count, bytes
 }

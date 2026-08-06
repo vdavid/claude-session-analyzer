@@ -30,8 +30,8 @@ func TestFindLocatesASessionAndItsSubagentLanes(t *testing.T) {
 	if want := filepath.Join(testRoot(), "-tmp-alpha", alphaID+".jsonl"); loc.TranscriptPath != want {
 		t.Errorf("transcript = %q, want %q", loc.TranscriptPath, want)
 	}
-	if loc.DirPath == "" {
-		t.Error("dir path should be set when the session has a sibling directory")
+	if len(loc.DirPaths) != 1 {
+		t.Errorf("dir paths = %v, want the one sitting next to the lead", loc.DirPaths)
 	}
 
 	// Direct subagents first, then the ones a workflow spawned, which sit a level deeper.
@@ -41,11 +41,11 @@ func TestFindLocatesASessionAndItsSubagentLanes(t *testing.T) {
 		"agent-alegacy-bbbb2222.jsonl",
 		"agent-aworker-dddd4444.jsonl",
 	}
-	if len(loc.SubagentPaths) != len(want) {
-		t.Fatalf("subagent paths = %v, want %d of them", loc.SubagentPaths, len(want))
+	if len(loc.SubagentLanes) != len(want) {
+		t.Fatalf("lanes = %v, want %d of them", laneRels(loc), len(want))
 	}
 	for i, w := range want {
-		if got := filepath.Base(loc.SubagentPaths[i]); got != w {
+		if got := filepath.Base(loc.SubagentLanes[i].Rel); got != w {
 			t.Errorf("subagent %d = %q, want %q (sorted by name)", i, got, w)
 		}
 	}
@@ -56,9 +56,9 @@ func TestFindIgnoresAWorkflowJournal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
-	for _, path := range loc.SubagentPaths {
-		if filepath.Base(path) == "journal.jsonl" {
-			t.Errorf("journal.jsonl is a workflow's own log, not an agent lane: %s", path)
+	for _, lane := range loc.SubagentLanes {
+		if filepath.Base(lane.Rel) == "journal.jsonl" {
+			t.Errorf("journal.jsonl is a workflow's own log, not an agent lane: %s", lane.Rel)
 		}
 	}
 }
@@ -68,11 +68,11 @@ func TestFindHandlesASessionWithNoSubagents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
-	if loc.DirPath != "" {
-		t.Errorf("dir path = %q, want empty", loc.DirPath)
+	if len(loc.DirPaths) != 0 {
+		t.Errorf("dir paths = %v, want none", loc.DirPaths)
 	}
-	if len(loc.SubagentPaths) != 0 {
-		t.Errorf("subagent paths = %v, want none", loc.SubagentPaths)
+	if len(loc.SubagentLanes) != 0 {
+		t.Errorf("lanes = %v, want none", laneRels(loc))
 	}
 }
 

@@ -18,8 +18,9 @@ type Lane struct {
 	// Name is what to label the lane: the metadata's name, its agent type, or the agent id, whichever comes first.
 	Name   string
 	IsLead bool
-	Path   string
-	Meta   AgentMeta
+	// Paths are the files the lane was read from, more than one when it was written under several project slugs.
+	Paths []string
+	Meta  AgentMeta
 	// WorkflowID names the workflow that spawned this lane, empty when the session spawned it directly.
 	WorkflowID string
 
@@ -44,38 +45,40 @@ type AgentMeta struct {
 	TeamName    string `json:"teamName"`
 }
 
-// agentIDFromPath turns `.../subagents/agent-am1-engine-aeeff1f0.jsonl` into `am1-engine-aeeff1f0`. The remainder
-// can't be split into a name and a hash, because names contain dashes too, so don't try: the label comes from the
-// metadata.
-func agentIDFromPath(path string) string {
-	return strings.TrimPrefix(strings.TrimSuffix(filepath.Base(path), ".jsonl"), "agent-")
+// agentIDFromPath turns `subagents/agent-am1-engine-aeeff1f0.jsonl` into `am1-engine-aeeff1f0`. The remainder can't be
+// split into a name and a hash, because names contain dashes too, so don't try: the label comes from the metadata.
+func agentIDFromPath(rel string) string {
+	return strings.TrimPrefix(strings.TrimSuffix(filepath.Base(rel), ".jsonl"), "agent-")
 }
 
 // workflowIDFromPath returns the workflow a lane belongs to, read from `subagents/workflows/<workflow-id>/agent-*`,
 // and empty for a lane the session spawned directly.
-func workflowIDFromPath(path string) string {
-	dir, parent := filepath.Split(filepath.Dir(path))
+func workflowIDFromPath(rel string) string {
+	dir, parent := filepath.Split(filepath.Dir(rel))
 	if filepath.Base(filepath.Clean(dir)) != "workflows" {
 		return ""
 	}
 	return parent
 }
 
-// readAgentMeta reads the `.meta.json` sitting next to a subagent transcript. A missing, unreadable, or undecodable
-// one isn't an error: plenty of lanes have none, and a lane without metadata still has all its records. It costs a
-// label, nothing more.
-func readAgentMeta(transcriptPath string) AgentMeta {
-	path := strings.TrimSuffix(transcriptPath, ".jsonl") + ".meta.json"
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return AgentMeta{}
+// readAgentMeta reads the `.meta.json` sitting next to a subagent transcript, taking the first of the lane's files that
+// has one: a lane split across project slugs carries its metadata under the slug it started in. A missing, unreadable,
+// or undecodable one isn't an error: plenty of lanes have none, and a lane without metadata still has all its records.
+// It costs a label, nothing more.
+func readAgentMeta(transcriptPaths []string) AgentMeta {
+	for _, transcriptPath := range transcriptPaths {
+		raw, err := os.ReadFile(strings.TrimSuffix(transcriptPath, ".jsonl") + ".meta.json")
+		if err != nil {
+			continue
+		}
+		var meta AgentMeta
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			continue
+		}
+		meta.Present = true
+		return meta
 	}
-	var meta AgentMeta
-	if err := json.Unmarshal(raw, &meta); err != nil {
-		return AgentMeta{}
-	}
-	meta.Present = true
-	return meta
+	return AgentMeta{}
 }
 
 // laneName picks the best label available.

@@ -1,0 +1,4 @@
+{"type":"user","uuid":"g1","parentUuid":null,"timestamp":"2026-08-05T10:00:00.000Z","cwd":"/tmp/gamma","sessionId":"44444444-4444-4444-4444-444444444444","message":{"role":"user","content":"Fix the thing."}}
+{"type":"custom-title","customTitle":"Worktree run"}
+{"type":"worktree-state","state":"entered"}
+{"type":"assistant","uuid":"g2","parentUuid":"g1","timestamp":"2026-08-05T10:00:12.000Z","cwd":"/tmp/gamma/.claude/worktrees/fix","sessionId":"44444444-4444-4444-4444-444444444444","message":{"role":"assistant","content":[{"type":"text","text":"Fixed."}]}}

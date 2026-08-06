@@ -241,7 +241,7 @@ func TestRealCorpusSweep(t *testing.T) {
 	total := transcript.Stats{SkippedTypes: map[string]int{}}
 	start := time.Now()
 	for _, path := range paths {
-		lane, err := loadLane(path, transcript.Options{})
+		lane, err := loadLane([]string{path}, transcript.Options{})
 		if err != nil {
 			t.Errorf("load %s: %v", path, err)
 			continue

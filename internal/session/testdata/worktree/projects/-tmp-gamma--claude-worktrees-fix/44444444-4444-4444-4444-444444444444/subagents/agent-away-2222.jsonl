@@ -1,0 +1,2 @@
+{"type":"user","uuid":"w1","parentUuid":null,"timestamp":"2026-08-05T10:00:01.000Z","cwd":"/tmp/gamma/.claude/worktrees/fix","sessionId":"44444444-4444-4444-4444-444444444444","agentId":"away-2222","message":{"role":"user","content":"Work in the worktree."}}
+{"type":"assistant","uuid":"w2","parentUuid":"w1","timestamp":"2026-08-05T10:00:08.000Z","cwd":"/tmp/gamma/.claude/worktrees/fix","sessionId":"44444444-4444-4444-4444-444444444444","agentId":"away-2222","message":{"role":"assistant","content":[{"type":"text","text":"Worked."}]}}

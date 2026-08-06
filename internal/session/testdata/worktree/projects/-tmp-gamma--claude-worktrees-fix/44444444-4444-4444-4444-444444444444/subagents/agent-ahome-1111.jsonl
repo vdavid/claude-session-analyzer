@@ -1,0 +1,2 @@
+{"type":"assistant","uuid":"h2","parentUuid":"h1","timestamp":"2026-08-05T10:00:03.000Z","cwd":"/tmp/gamma","sessionId":"44444444-4444-4444-4444-444444444444","agentId":"ahome-1111","message":{"role":"assistant","content":[{"type":"text","text":"Second."}]}}
+{"type":"assistant","uuid":"h4","parentUuid":"h3","timestamp":"2026-08-05T10:00:09.000Z","cwd":"/tmp/gamma","sessionId":"44444444-4444-4444-4444-444444444444","agentId":"ahome-1111","message":{"role":"assistant","content":[{"type":"text","text":"Fourth."}]}}
