@@ -313,5 +313,40 @@ func isPrompt(rec *transcript.Record) bool {
 // compactBoundary is the system record subtype that marks a finished compaction.
 const compactBoundary = "compact_boundary"
 
-// emitCompaction turns a finished compaction into its own row.
-func (d *laneDeriver) emitCompaction(rec *transcript.Record, ts time.Time) {}
+// emitCompaction turns a finished compaction into its own row, and leaves the time before it as a wait.
+//
+// The records around a compaction disagree about when it happened: the boundary is stamped when compaction finished,
+// while the records replayed after it keep the stamps they had before, which is where the reference session's 132 s
+// backwards jump comes from. So the row is measured back from the boundary using the duration the boundary itself
+// reports, and the idle stretch that came before stays a wait rather than being swallowed.
+func (d *laneDeriver) emitCompaction(rec *transcript.Record, ts time.Time) {
+	start := ts
+	if rec.System.Compact != nil && rec.System.Compact.Duration > 0 {
+		start = ts.Add(-rec.System.Compact.Duration)
+	}
+	if start.Before(d.cursor) {
+		start = d.cursor // a compaction can't reach back past work that already happened
+	}
+
+	if start.After(d.cursor) {
+		d.rows = append(d.rows, Row{
+			From:   d.cursor,
+			Until:  start,
+			Agent:  d.lane.Name,
+			LaneID: d.lane.ID,
+			Kind:   KindWaiting,
+			Info:   "idle until the context was compacted",
+			Line:   rec.Line,
+		})
+	}
+	d.rows = append(d.rows, Row{
+		From:   start,
+		Until:  ts,
+		Agent:  d.lane.Name,
+		LaneID: d.lane.ID,
+		Kind:   KindCompacting,
+		Info:   compactionInfo(rec.System.Compact),
+		Line:   rec.Line,
+	})
+	d.cursor = ts
+}

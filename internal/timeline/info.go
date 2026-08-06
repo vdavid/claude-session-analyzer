@@ -138,3 +138,32 @@ func executionInfo(c *call, v verdict, batch int) string {
 	}
 	return strings.Join(parts, "; ")
 }
+
+// compactionInfo says what a compaction achieved. A boundary that reports nothing still gets a row, because the
+// moment is worth marking even when the numbers are missing.
+func compactionInfo(c *transcript.CompactInfo) string {
+	if c == nil || c.PreTokens == 0 {
+		return "the context was compacted"
+	}
+	info := "compacted " + thousands(c.PreTokens) + " tokens down to " + thousands(c.PostTokens)
+	if c.Trigger != "" {
+		info += " (" + c.Trigger + ")"
+	}
+	return info
+}
+
+// thousands groups a count for reading: 674475 becomes 674,475.
+func thousands(n int) string {
+	s := strconv.Itoa(n)
+	if n < 0 {
+		return "-" + thousands(-n)
+	}
+	var b strings.Builder
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
+}
