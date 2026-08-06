@@ -52,3 +52,14 @@ not how the code got there. Git holds the history.
 
 `gofmt -l .`, `go vet ./...`, and `go test ./...` all have to be green. M6 wires a single `pnpm check` over these plus
 the frontend gates.
+
+Two more tests read transcripts off this machine, so they skip by default. Run them after anything that touches
+decoding, because hand-written fixtures can't catch format drift:
+
+- One session: `CSA_REAL_SESSION_ID=<id or unique prefix> go test ./internal/session -run RealSession -v`. Reports
+  lanes, timings, and every record type it skipped.
+- Every transcript on the machine: `CSA_SWEEP=1 go test ./internal/session -run CorpusSweep -v -timeout 20m`. Takes
+  about 35 s over 4,438 transcripts. A record type appearing in its skip list that isn't in
+  `docs/transcript-format.md` means the format moved.
+
+Set `CSA_REAL_ROOT` to read from somewhere other than the default transcript root.

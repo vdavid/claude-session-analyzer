@@ -212,4 +212,23 @@ coordination cost is not worth it.
 
 ## Execution status
 
-Filled in as milestones land.
+**M1 done.** Repo skeleton, `internal/transcript` (streaming reader), and `internal/session` (discovery and lanes).
+Verified against every transcript on the machine: 4,438 files, 1,221,828 lines, 0 malformed.
+
+Four things the plan above got wrong or missed, all now corrected in `docs/transcript-format.md`, which is the doc to
+trust from here:
+
+1. **Workflow subagents are lanes and the plan doesn't mention them.** They live one level deeper, at
+   `subagents/workflows/wf_<id>/agent-*.jsonl`. One session in the corpus has 977 of them. M5 needs a plan for
+   drawing a session with a thousand lanes.
+2. **"One record per content block" is version-dependent.** Newer transcripts split them, older ones pack up to 13
+   blocks into one record, including 11 parallel `tool_use` calls. Decision 5 (parallel calls stay separate rows) is
+   therefore load-bearing, not theoretical.
+3. **`thinking.thinking` is not always empty.** It's empty in 5,469 of 5,471 sampled blocks, but two on `2.1.177`
+   carry real reasoning. Decision 7 should use the text when it's there and fall back to inference otherwise.
+4. **Timestamps go backwards.** 186 of 15,831 records in the reference session, mostly sub-millisecond jitter, but
+   compaction produces a real 132 s backward jump. M2 must clamp negative spans and read compaction time from
+   `compactMetadata.durationMs`.
+
+Also worth knowing for M2: subagent `.meta.json` is often missing or partial, so `Lane.Name` already falls back
+through `name` → `agentType` → agent id, and `Meta.Color` is empty often enough that the UI needs its own palette.
