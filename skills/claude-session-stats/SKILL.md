@@ -96,7 +96,13 @@ claude-session-analyzer stats 532ac591 --group-by kind
 Which agents used a tool:
 
 ```sh
-claude-session-analyzer stats 532ac591 --where group=codegraph* --group-by agent
+claude-session-analyzer stats 532ac591 --where 'group=codegraph*' --group-by agent
+```
+
+How widely, not just how often. `matched.sessions` over `totals.sessions` answers "codegraph in 12 of 735 sessions":
+
+```sh
+claude-session-analyzer stats --where 'group=codegraph*' --group-by project --json
 ```
 
 ## Rules
@@ -106,6 +112,8 @@ claude-session-analyzer stats 532ac591 --where group=codegraph* --group-by agent
 - **A tool's own clock excludes the agent composing the call.** The CLI already handles this; don't add the two together
   from raw rows.
 - **Quote the denominator** with any percentage.
+- **`sessions` and `lanes` never sum.** Distinct counts: a session in two groups counts once in each. For a per-session
+  rate divide by `matched.sessions`, never `totals.sessions`, or you divide by sessions that never did the thing.
 - Only `--json` output is stable enough to parse. Table output is for reading.
 
 ## Limits
