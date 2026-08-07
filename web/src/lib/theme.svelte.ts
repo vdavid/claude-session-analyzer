@@ -11,7 +11,7 @@
  */
 
 import { browser } from '$app/environment'
-import { FAMILY_ORDER, familyStyle, type ToolFamily } from './classes'
+import { categoryVar, PAINTED_CATEGORIES } from './categories'
 import { KIND_ORDER, kindStyle } from './kinds'
 
 const CHROME = {
@@ -32,8 +32,8 @@ const CHROME = {
 export interface Palette {
     dark: boolean
     kind: Record<string, string>
-    /** The tool families, the page's second colour vocabulary. See `classes.ts`. */
-    family: Record<ToolFamily, string>
+    /** The tool categories, the page's second colour vocabulary. See `categories.ts`. */
+    category: Record<string, string>
     chrome: Record<keyof typeof CHROME, string>
 }
 
@@ -41,7 +41,7 @@ export interface Palette {
 const FALLBACK: Palette = {
     dark: false,
     kind: Object.fromEntries(KIND_ORDER.map((k) => [k, '#888888'])),
-    family: Object.fromEntries(FAMILY_ORDER.map((f) => [f, '#888888'])) as Palette['family'],
+    category: Object.fromEntries(PAINTED_CATEGORIES.map((c) => [c, '#888888'])),
     chrome: Object.fromEntries(Object.keys(CHROME).map((k) => [k, '#888888'])) as Palette['chrome'],
 }
 
@@ -51,7 +51,7 @@ function read(): Palette {
     return {
         dark: matchMedia('(prefers-color-scheme: dark)').matches,
         kind: Object.fromEntries(KIND_ORDER.map((k) => [k, value(kindStyle(k).cssVar)])),
-        family: Object.fromEntries(FAMILY_ORDER.map((f) => [f, value(familyStyle(f).cssVar)])) as Palette['family'],
+        category: Object.fromEntries(PAINTED_CATEGORIES.map((c) => [c, value(categoryVar(c))])),
         chrome: Object.fromEntries(Object.entries(CHROME).map(([k, v]) => [k, value(v)])) as Palette['chrome'],
     }
 }

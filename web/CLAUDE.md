@@ -12,16 +12,19 @@ it consumes: `docs/api.md`. Read that before touching anything that reads a JSON
   machine, so nothing to render ahead of time.
 - **Group by `laneId`, never by `agent`.** 977 lanes in one session share the name `workflow-subagent`.
 - **Colour belongs to data.** Chrome is neutral, one blue for links and focus; every saturated pixel stands for an
-  activity kind or a tool family. Both vocabularies live in `src/app.css` and nowhere else, and no chart mixes them:
-  each sits in its own section behind its own legend. Look a kind or class up by name, never by array index, because the
-  API only sends what a session has.
-- **Tool palette is seven slots in a fixed order, and the order is the safety mechanism.** It decides which pairs touch
-  in the pie. Don't reorder `FAMILY_ORDER` (`src/lib/classes.ts`), and re-run the validator before changing a slot:
-  exact two commands, the numbers, and the two failures that are by design are in `docs/frontend.md`.
-- **A tool class the engine grows falls silently into the neutral family.** `CLASS_FAMILIES` in `src/lib/classes.ts` is
-  a hand-written map of the 16 classes in `internal/timeline/tool.go`; a name missing from it draws as "Everything else"
-  rather than throwing. Right failure for a page, and the one that goes unnoticed: adding a `ToolClass` in Go means
-  adding it there in the same change.
+  activity kind or a tool category. Both vocabularies live in `src/app.css` and nowhere else, and no chart mixes them:
+  each sits in its own section behind its own legend. Look a kind or category up by name, never by array index, because
+  the API only sends what a session has.
+- **The tool taxonomy is served, never defined here.** `toolCategories` on the timeline response carries the seven
+  category names, their labels, and the order; every group carries its own `category`. `src/lib/categories.ts` holds
+  only the name-to-CSS-variable palette. Never map a `class` onto a bucket here: that mapping lives in
+  `internal/timeline/category.go` and has exactly one definition.
+- **Tool palette is seven slots, and the API's category order is the safety mechanism.** It decides which pairs touch in
+  the pie. Re-run the validator before changing a slot, and re-derive the order if the engine ever reorders
+  `Categories`: exact two commands, the numbers, and the two failures that are by design are in `docs/frontend.md`.
+- **A category the API grows falls to the neutral slot and sorts last.** `categoryVar` returns `--csa-tool-other` for a
+  name with no slot, and `toolBreakdown` ranks an unlisted category after every listed one. Right failure for a page:
+  the groups still show up, uncoloured rather than missing.
 - **Never present a `byKind` share as a share of elapsed time.** It's lane time, which is larger. `docs/api.md` § The
   two numbers that aren't the same.
 - Tailwind tokens are registered `@theme inline` over custom properties. An opacity modifier on one compiles to a
@@ -36,7 +39,7 @@ it consumes: `docs/api.md`. Read that before touching anything that reads a JSON
 - `src/lib/`: `api.ts` (every call to the server, errors as `ApiError` with a `code` to branch on), `types.ts` (JSON
   shapes), `format.ts` (durations, instants, bytes; `formatBytes` matches `humanBytes` in `internal/cli/format.go`),
   `kinds.ts` (the eleven kinds: legend order, colour variable, family, and the sentence keeping each honest),
-  `classes.ts` (engine's 16 tool classes mapped onto seven drawn families, in the order the palette was validated in),
+  `categories.ts` (the tool-category palette: name to CSS variable, and the neutral an unknown name falls to),
   `theme.svelte.ts` (stylesheet read back out for canvas, following `prefers-color-scheme`).
 - `src/lib/transform/`: the tested layer. API JSON into chart series. Nothing else is unit-tested. Must-knows:
   `web/src/lib/transform/CLAUDE.md`.

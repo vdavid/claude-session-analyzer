@@ -145,6 +145,13 @@ type transcriptBlockCase struct {
 	value string
 }
 
+// id is one expected ToolID, with the category filled in by the same mapping the engine uses. This test is about the
+// class and the two names a breakdown groups by; whether that mapping is right is `category_test.go`'s question, and
+// repeating a category on thirty cases here would only make them harder to read.
+func id(class ToolClass, group, leaf string) ToolID {
+	return withCategory(ToolID{Class: class, Group: group, Leaf: leaf})
+}
+
 // TestIdentify covers the two names a breakdown groups a call by. The cases that matter are the two tools that are
 // really many: `Bash`, which is 62% of the calls in the corpus, and an MCP server, whose methods would otherwise be
 // as many separate tools as it has methods.
@@ -154,81 +161,81 @@ func TestIdentify(t *testing.T) {
 		want  ToolID
 	}{
 		// A tool that means one thing is its own group, and its own leaf.
-		{transcriptBlockCase{"Read", "file_path", "/tmp/a"}, ToolID{ClassFileRead, "Read", "Read"}},
-		{transcriptBlockCase{"Edit", "file_path", "/tmp/a"}, ToolID{ClassFileWrite, "Edit", "Edit"}},
-		{transcriptBlockCase{"EnterWorktree", "branch", "x"}, ToolID{ClassAgent, "EnterWorktree", "EnterWorktree"}},
-		{transcriptBlockCase{"Skill", "skill", "daily-wrap"}, ToolID{ClassOther, "Skill", "Skill"}},
+		{transcriptBlockCase{"Read", "file_path", "/tmp/a"}, id(ClassFileRead, "Read", "Read")},
+		{transcriptBlockCase{"Edit", "file_path", "/tmp/a"}, id(ClassFileWrite, "Edit", "Edit")},
+		{transcriptBlockCase{"EnterWorktree", "branch", "x"}, id(ClassAgent, "EnterWorktree", "EnterWorktree")},
+		{transcriptBlockCase{"Skill", "skill", "daily-wrap"}, id(ClassOther, "Skill", "Skill")},
 
 		// An MCP call is grouped by the server it went to, and named by the method it called.
 		{
 			transcriptBlockCase{"mcp__codegraph__codegraph_search", "query", "Row"},
-			ToolID{ClassMCP, "codegraph (MCP)", "codegraph_search"},
+			id(ClassMCP, "codegraph (MCP)", "codegraph_search"),
 		},
 		{
 			// A server name carrying single underscores survives: the separator is two.
 			transcriptBlockCase{"mcp__claude_ai_Gmail__get_thread", "query", "x"},
-			ToolID{ClassMCP, "claude_ai_Gmail (MCP)", "get_thread"},
+			id(ClassMCP, "claude_ai_Gmail (MCP)", "get_thread"),
 		},
 		{
 			// A name with no method to it still says which server it went to.
 			transcriptBlockCase{"mcp__db", "query", "x"},
-			ToolID{ClassMCP, "db (MCP)", "db"},
+			id(ClassMCP, "db (MCP)", "db"),
 		},
 
 		// Bash is grouped by what the command was doing, and named by the program that earned it.
-		{transcriptBlockCase{"Bash", "command", "ls -la /tmp"}, ToolID{ClassFileRead, "Bash (file read)", "ls"}},
-		{transcriptBlockCase{"Bash", "command", "git commit -m 'x'"}, ToolID{ClassGit, "Bash (git)", "git commit"}},
-		{transcriptBlockCase{"Bash", "command", "gh run watch"}, ToolID{ClassGit, "Bash (git)", "gh run"}},
-		{transcriptBlockCase{"Bash", "command", "cargo test -p app"}, ToolID{ClassTest, "Bash (test)", "cargo test"}},
-		{transcriptBlockCase{"Bash", "command", "go build ./..."}, ToolID{ClassBuild, "Bash (build)", "go build"}},
+		{transcriptBlockCase{"Bash", "command", "ls -la /tmp"}, id(ClassFileRead, "Bash (file read)", "ls")},
+		{transcriptBlockCase{"Bash", "command", "git commit -m 'x'"}, id(ClassGit, "Bash (git)", "git commit")},
+		{transcriptBlockCase{"Bash", "command", "gh run watch"}, id(ClassGit, "Bash (git)", "gh run")},
+		{transcriptBlockCase{"Bash", "command", "cargo test -p app"}, id(ClassTest, "Bash (test)", "cargo test")},
+		{transcriptBlockCase{"Bash", "command", "go build ./..."}, id(ClassBuild, "Bash (build)", "go build")},
 		{
 			transcriptBlockCase{"Bash", "command", "cargo clippy --all-targets -- -D warnings"},
-			ToolID{ClassLint, "Bash (lint)", "cargo clippy"},
+			id(ClassLint, "Bash (lint)", "cargo clippy"),
 		},
-		{transcriptBlockCase{"Bash", "command", "go vet ./..."}, ToolID{ClassLint, "Bash (lint)", "go vet"}},
+		{transcriptBlockCase{"Bash", "command", "go vet ./..."}, id(ClassLint, "Bash (lint)", "go vet")},
 		{
 			transcriptBlockCase{"Bash", "command", "npx prettier --check ."},
-			ToolID{ClassLint, "Bash (lint)", "npx prettier"},
+			id(ClassLint, "Bash (lint)", "npx prettier"),
 		},
-		{transcriptBlockCase{"Bash", "command", "pnpm check -q go"}, ToolID{ClassChecker, "Bash (checker)", "pnpm check"}},
+		{transcriptBlockCase{"Bash", "command", "pnpm check -q go"}, id(ClassChecker, "Bash (checker)", "pnpm check")},
 		// A runner's `run` is punctuation, so the leaf names what it was asked to run.
-		{transcriptBlockCase{"Bash", "command", "npm run check"}, ToolID{ClassChecker, "Bash (checker)", "npm check"}},
+		{transcriptBlockCase{"Bash", "command", "npm run check"}, id(ClassChecker, "Bash (checker)", "npm check")},
 		// A gate invoked by path is named by its file, not by the path to it.
 		{
 			transcriptBlockCase{"Bash", "command", "./scripts/check.sh --fast"},
-			ToolID{ClassChecker, "Bash (checker)", "check.sh"},
+			id(ClassChecker, "Bash (checker)", "check.sh"),
 		},
 		// The program that named the compound command is the one the leaf carries.
 		{
 			transcriptBlockCase{"Bash", "command", "git add -A && pnpm check"},
-			ToolID{ClassChecker, "Bash (checker)", "pnpm check"},
+			id(ClassChecker, "Bash (checker)", "pnpm check"),
 		},
 		// Nothing in the command outranks a plain shell program, so the first one names it.
-		{transcriptBlockCase{"Bash", "command", "awk '{print $1}' log.txt"}, ToolID{ClassShell, "Bash (shell)", "awk"}},
+		{transcriptBlockCase{"Bash", "command", "awk '{print $1}' log.txt"}, id(ClassShell, "Bash (shell)", "awk")},
 		// Arranging the shell isn't work, so it doesn't get to name the command.
 		{
 			transcriptBlockCase{"Bash", "command", "cd apps/desktop && python3 tool.py"},
-			ToolID{ClassShell, "Bash (shell)", "python3"},
+			id(ClassShell, "Bash (shell)", "python3"),
 		},
 		{
 			transcriptBlockCase{"Bash", "command", "export RUST_LOG=debug; python3 tool.py"},
-			ToolID{ClassShell, "Bash (shell)", "python3"},
+			id(ClassShell, "Bash (shell)", "python3"),
 		},
 		// A command that only arranges the shell still has to be named after something.
-		{transcriptBlockCase{"Bash", "command", "cd /tmp/work"}, ToolID{ClassShell, "Bash (shell)", "cd"}},
+		{transcriptBlockCase{"Bash", "command", "cd /tmp/work"}, id(ClassShell, "Bash (shell)", "cd")},
 		// A wrapper that hides the command behind a duration loses both the class and the program if it's read as one.
 		{
 			transcriptBlockCase{"Bash", "command", "timeout 120 cargo test -p app"},
-			ToolID{ClassTest, "Bash (test)", "cargo test"},
+			id(ClassTest, "Bash (test)", "cargo test"),
 		},
 		{
 			transcriptBlockCase{"Bash", "command", "timeout -k 5 30s pnpm check"},
-			ToolID{ClassChecker, "Bash (checker)", "pnpm check"},
+			id(ClassChecker, "Bash (checker)", "pnpm check"),
 		},
 		// Fetching over the network is web work, wherever it sits in the command.
 		{
 			transcriptBlockCase{"Bash", "command", "curl -s https://example.com | jq .name"},
-			ToolID{ClassWeb, "Bash (web)", "curl"},
+			id(ClassWeb, "Bash (web)", "curl"),
 		},
 	}
 
@@ -246,7 +253,7 @@ func TestIdentifyBashWithoutItsCommand(t *testing.T) {
 	b := toolUseBlock("id", "Bash", "description", "Rewrite the fixture")
 	b.InputElided = []string{"command"}
 
-	want := ToolID{ClassShell, "Bash (shell)", "Bash"}
+	want := id(ClassShell, "Bash (shell)", "Bash")
 	if got := Identify(b); got != want {
 		t.Errorf("Identify = %+v, want %+v", got, want)
 	}

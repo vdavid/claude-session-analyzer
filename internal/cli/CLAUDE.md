@@ -21,6 +21,8 @@ a judgement call belongs in `internal/timeline`, `internal/agg`, or `internal/st
   share; the table names its denominator in the header, numerator included on a tool question (`Running / lane time`).
 - **`stats` leads its summary with net and prints the ladder as a list**, one rung per line with the subtraction written
   beside it. Three durations in one sentence is how a reader ends up quoting the wrong one. Definition: `docs/api.md`.
+- **`--vocabulary` prints both levels of the tool taxonomy**, categories then classes, coarse first, so a reader picks
+  the level their question is at rather than guessing which of the sixteen classes a "check" is.
 - **The table's columns follow `Result.ToolClocksApart`.** On a tool question the time column is `Running`, with
   `Composing` and `Stalled` beside it where either holds something. Anywhere else those two are subsets of the time
   column, so showing them would print the same number twice. A zero cell is a dash, not `0.0s`.

@@ -22,8 +22,8 @@ handling lives in one place.
 - `Chart.svelte`: create, resize (`ResizeObserver`), dispose, event wiring, outside-in highlight.
 - `KindPie.svelte`: donut of lane time. Waits carry a diagonal hatch and the two ways a session loses time carry dots,
   so the chart survives being read without hue.
-- `ToolPie.svelte`: donut of tool calls, coloured by family rather than group. Slices of one family are adjacent and
-  share a colour by design; the 2px surface ring, the legend, and the shared highlight tell them apart.
+- `ToolPie.svelte`: donut of tool calls, coloured by tool category rather than group. Slices of one category are
+  adjacent and share a colour by design; the 2px surface ring, the legend, and the shared highlight tell them apart.
 - `Swimlane.svelte`: two custom series, thin bars for gaps and thick for producing. Rows scroll through a fixed window
   (`MAX_VISIBLE_ROWS`) rather than shrinking, and a click on a workflow's bar opens it.
 - `ConcurrencyTrace.svelte`: stepped area strip under the session header.

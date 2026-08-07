@@ -21,9 +21,19 @@ Where judgement lives, and where being wrong is invisible in output. Every rule 
 - **A class is what the work was for, not what it mechanically is.** `cargo check` compiles and is a `lint`, because it
   produces nothing; `cargo doc` renders HTML and is a `build`. Reasoning and the corpus numbers:
   `docs/timeline-rules.md`.
-- **Adding a `ToolClass` costs four edits in the same change**: `precedence` (`tool.go`), `stallThreshold` (`stall.go`)
-  if the work earns the generous line, `classes` (`internal/stats/spec.go`), and `CLASS_FAMILIES`
-  (`web/src/lib/classes.ts`). Only the third fails loudly.
+- **Adding a `ToolClass` costs four edits in the same change**: `Classes` and `precedence` (`tool.go`),
+  `classCategories` (`category.go`), and `stallThreshold` (`stall.go`) if the work earns the generous line. All but
+  `precedence` fail loudly (`TestTheClassListMatchesTheEngines` in `internal/stats`, `TestEveryClassHasACategory` here).
+  Nothing in the frontend needs touching: it reads the taxonomy off the API.
+- **`ToolCategory` (`category.go`) is configuration, not engine truth.** Seven buckets over the sixteen classes, and the
+  per-group overrides encode one person's workflow semantics (`codegraph (MCP)` is reading, `WebFetch` is not QA). Keep
+  it a flat reviewable list someone can change without reading the rest of this package, each override carrying its
+  reason. A class decides the default; a group name overrides it. A row with no class gets no category, so thinking and
+  waiting never land in one.
+- **A taxonomy change invalidates every cached digest.** `ClassificationFingerprint` exists to be hashed by
+  `internal/cache`'s `TestTheDigestVersionMovesWithTheDerivation`, which is what makes a mapping change fail with the
+  `cache.Version` to bump. `classificationProbes` is what it covers, one representative call per class plus one per
+  override, and a class no probe reaches is a rule change the guard can't see.
 - **A wait ended by a task notification asks whose task it was.** A live other lane's task makes it
   `waiting for a teammate`; the lane's own, a finished lane's, or an id no lane claims stays
   `waiting for a background task`. `attributeTaskWaits` (`wait.go`) runs as a post-pass in `Derive`, after the lane
@@ -40,7 +50,8 @@ Where judgement lives, and where being wrong is invisible in output. Every rule 
 
 - `derive.go`: the walk. `kind.go`: 11 kinds, three predicates. `options.go`: two spans bounding a heuristic.
 - `wait.go` (what ended a gap, who was alive), `stall.go` (late results, timeouts), `apierror.go` (a refused request),
-  `tool.go` (what a call was doing, two names `ToolID` gives it), `info.go` (the `Extra info` column), `csv.go` (CSV
+  `tool.go` (what a call was doing, `Classes`, two names `ToolID` gives it), `category.go` (the seven categories, the
+  class defaults, the group overrides, `ClassificationFingerprint`), `info.go` (the `Extra info` column), `csv.go` (CSV
   contract).
 - `Identify` reads a call once, returns class plus both breakdown names. `Classify` is the thin wrapper for callers
   wanting only the class, so don't add a second parse of the same shell command.

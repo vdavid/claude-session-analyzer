@@ -19,16 +19,19 @@ import (
 // Version is the derivation this cache holds answers from. A digest is only valid for the rules that produced it, and a
 // stale one is invisibly wrong, so bumping this is how a rule change invalidates the corpus.
 //
-// TestTheDigestVersionMovesWithTheDerivation ties it to the golden CSV: change what the derivation outputs without
-// bumping this, and that test fails with the number to write here. It can't see the two other reasons to bump, and both
-// have happened:
+// TestTheDigestVersionMovesWithTheDerivation ties it to two fingerprints, and either one moving fails that test with the
+// number to write here:
 //
-//   - A stored number changes meaning while the derivation stays put. Version 3 added `Totals.NetSeconds` and took the
-//     stalls out of a tool group's `Seconds`, off the same rows version 2 was built from.
-//   - A rule moves in a way the golden fixture has no call for. Version 4 split `lint` out of `build`, so every cached
-//     `cargo check`, `cargo clippy`, `go vet`, `prettier`, and `eslint` cell carries the wrong class and group; the
-//     fixture's only compiler call is a `cargo build`, which stayed a build, so the golden never moved.
-const Version = 4
+//   - The golden CSV, which is what the derivation outputs for one fixture session.
+//   - `timeline.ClassificationFingerprint`, which is the class and category mapping whatever that fixture holds. This
+//     half exists because the golden alone missed a rule change twice: version 4 split `lint` out of `build`, and the
+//     fixture's only compiler call is a `cargo build` that stayed a build, so every cached `cargo check` cell went stale
+//     with the golden sitting still.
+//
+// The one reason to bump that neither fingerprint can see is a stored number or field changing meaning while the rules
+// stay put. Version 3 added `Totals.NetSeconds` and took the stalls out of a tool group's `Seconds`; version 5 added
+// `category` to every stored tool group, so a digest from version 4 carries groups with no category at all.
+const Version = 5
 
 // Digest is tier one: one session, summed, with no lane dimension. Every corpus query reads only these.
 type Digest struct {

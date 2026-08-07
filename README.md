@@ -79,8 +79,13 @@ claude-session-analyzer stats --where 'group=codegraph*' --group-by agent
 claude-session-analyzer stats 532ac591 --group-by group --top 8
 ```
 
-Dimensions are `kind`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, and `project`, for both
-`--group-by` and `--where`. `--vocabulary` prints every valid value. `--json` gives the machine-readable answer.
+Dimensions are `kind`, `category`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, and `project`,
+for both `--group-by` and `--where`. `--vocabulary` prints every valid value. `--json` gives the machine-readable
+answer.
+
+Tool calls come at two levels of detail: `category` is seven buckets (management, read, write, build, checks, QA,
+other), which is the level people ask at, and `class` is the sixteen underneath them. `--group-by category` is the quick
+answer to "where did the tool calls actually go".
 
 Every answer carries four denominators, because how long a session took, how much agent time it cost, how much of that
 was actually producing, and every agent's clock added together are four different numbers. The last three are printed as

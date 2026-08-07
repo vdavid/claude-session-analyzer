@@ -239,3 +239,55 @@ func TestASessionWithNoTimestampsReportsNullRatherThanYearOne(t *testing.T) {
 		t.Errorf("wanted no rows, got %d", body.Totals.Rows)
 	}
 }
+
+// TestAToolGroupCarriesItsCategory is the API half of the taxonomy: a consumer laying out a breakdown by category reads
+// it off the group rather than mapping classes itself. The mapping is `internal/timeline`'s, and its own tests hold it.
+func TestAToolGroupCarriesItsCategory(t *testing.T) {
+	rows := []timeline.Row{
+		toolRun("Bash", "checker", "Bash (checker)", "pnpm check", 0, time.Minute),
+		toolRun("mcp__codegraph__codegraph_search", "mcp", "codegraph (MCP)", "codegraph_search", time.Minute, time.Second),
+		toolRun("WebFetch", "web", "WebFetch", "WebFetch", time.Minute+time.Second, time.Second),
+	}
+	tl := &timeline.Timeline{Rows: rows, First: base, Last: base.Add(62 * time.Second)}
+	body := report.ForTimeline(session.Summary{ID: "s"}, tl, false)
+
+	want := map[string]string{
+		"Bash (checker)":  "checks",
+		"codegraph (MCP)": "read",
+		"WebFetch":        "other",
+	}
+	if len(body.Totals.ByTool) != len(want) {
+		t.Fatalf("wanted %d groups, got %d", len(want), len(body.Totals.ByTool))
+	}
+	for _, group := range body.Totals.ByTool {
+		if got := group.Category; got != want[group.Group] {
+			t.Errorf("%s: category = %q, want %q", group.Group, got, want[group.Group])
+		}
+	}
+}
+
+// TestATimelineCarriesTheCategoryListInLegendOrder is what lets a consumer draw a legend without hardcoding seven names
+// and an order of its own. The order is also the adjacency the frontend's palette was validated in.
+func TestATimelineCarriesTheCategoryListInLegendOrder(t *testing.T) {
+	body := report.ForTimeline(session.Summary{ID: "s"}, &timeline.Timeline{}, false)
+
+	if len(body.ToolCategories) != len(timeline.Categories) {
+		t.Fatalf("served %d categories, the engine has %d", len(body.ToolCategories), len(timeline.Categories))
+	}
+	for i, served := range body.ToolCategories {
+		if served.Category != string(timeline.Categories[i]) {
+			t.Errorf("position %d: served %q, engine says %q", i, served.Category, timeline.Categories[i])
+		}
+		if served.Label == "" || served.Description == "" {
+			t.Errorf("the category %q arrived with no label or no description", served.Category)
+		}
+	}
+}
+
+// toolRun is one row holding a tool's own clock, which is the row a breakdown counts.
+func toolRun(tool, class, group, leaf string, offset, length time.Duration) timeline.Row {
+	row := timeline.Row{LaneID: "lead", Agent: "lead", Kind: timeline.KindToolExecution,
+		Tool: tool, Class: timeline.ToolClass(class), ToolGroup: group, ToolLeaf: leaf}
+	row.From, row.Until = span(offset, length)
+	return row
+}

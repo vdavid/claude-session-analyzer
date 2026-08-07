@@ -12,38 +12,41 @@ import (
 type Dim string
 
 const (
-	DimKind    Dim = "kind"
-	DimClass   Dim = "class"
-	DimGroup   Dim = "group"
-	DimLeaf    Dim = "leaf"
-	DimTool    Dim = "tool"
-	DimDay     Dim = "day"
-	DimLane    Dim = "lane"
-	DimAgent   Dim = "agent"
-	DimSession Dim = "session"
-	DimProject Dim = "project"
+	DimKind     Dim = "kind"
+	DimCategory Dim = "category"
+	DimClass    Dim = "class"
+	DimGroup    Dim = "group"
+	DimLeaf     Dim = "leaf"
+	DimTool     Dim = "tool"
+	DimDay      Dim = "day"
+	DimLane     Dim = "lane"
+	DimAgent    Dim = "agent"
+	DimSession  Dim = "session"
+	DimProject  Dim = "project"
 )
 
 // Dims lists every dimension, in the order a message and the vocabulary show them: what the agent was doing, what it
-// was doing it with, and where it happened.
+// was doing it with from the coarsest name down to the rawest, and where it happened.
 var Dims = []Dim{
-	DimKind, DimClass, DimGroup, DimLeaf, DimTool, DimDay, DimLane, DimAgent, DimSession, DimProject,
+	DimKind, DimCategory, DimClass, DimGroup, DimLeaf, DimTool, DimDay, DimLane, DimAgent, DimSession, DimProject,
 }
 
 // toolDims are the dimensions that only say something about a row a tool was involved in. Naming one of them makes a
 // query a question about tools, which is what turns the composing rows off. See Run.
-var toolDims = map[Dim]bool{DimClass: true, DimGroup: true, DimLeaf: true, DimTool: true}
+var toolDims = map[Dim]bool{DimCategory: true, DimClass: true, DimGroup: true, DimLeaf: true, DimTool: true}
 
 // laneDims are the two dimensions a session's own summary can't answer, because it was summed with the lanes rolled
 // away. A query naming one of them against such cells gets a note rather than a narrower answer.
 var laneDims = map[Dim]bool{DimLane: true, DimAgent: true}
 
-// classes are the tool classes the engine can label a call with, in the order `internal/timeline/tool.go` declares
-// them. The engine exports no list, so this one is a copy; TestTheClassListMatchesTheEngines reads that file and fails
-// with the name to add here when a class is added there.
-var classes = []string{
-	"checker", "build", "lint", "test", "dev server", "wait", "git", "search", "file read", "file write",
-	"agent", "ask", "mcp", "web", "shell", "other",
+// asStrings renders an engine list of named things for the vocabulary, which is strings all the way down because it's read
+// by an agent rather than by Go.
+func asStrings[T ~string](values []T) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		out = append(out, string(v))
+	}
+	return out
 }
 
 // Spec is one question.
@@ -71,22 +74,21 @@ type Clause struct {
 // Vocab is everything a query can name. An agent guessing whether a class is `checker` or `checker-script` guesses
 // wrong, so the CLI prints this rather than sending anyone to the source.
 type Vocab struct {
-	Dims    []Dim    `json:"dimensions"`
-	Kinds   []string `json:"kinds"`
-	Classes []string `json:"classes"`
+	Dims  []Dim    `json:"dimensions"`
+	Kinds []string `json:"kinds"`
+	// Categories are the seven buckets the classes fold into, in legend order. Classes are the sixteen underneath them.
+	Categories []string `json:"categories"`
+	Classes    []string `json:"classes"`
 }
 
-// Vocabulary is what a caller can say: the dimensions, the activity kinds the engine derives, and the classes it puts
-// tool calls into.
+// Vocabulary is what a caller can say: the dimensions, the activity kinds the engine derives, and the two levels it
+// puts tool calls into. Every list comes from `internal/timeline`, so none of them can drift from the engine's.
 func Vocabulary() Vocab {
-	kinds := make([]string, 0, len(timeline.Kinds))
-	for _, kind := range timeline.Kinds {
-		kinds = append(kinds, string(kind))
-	}
 	return Vocab{
-		Dims:    append([]Dim(nil), Dims...),
-		Kinds:   kinds,
-		Classes: append([]string(nil), classes...),
+		Dims:       append([]Dim(nil), Dims...),
+		Kinds:      asStrings(timeline.Kinds),
+		Categories: asStrings(timeline.Categories),
+		Classes:    asStrings(timeline.Classes),
 	}
 }
 

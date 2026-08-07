@@ -21,7 +21,7 @@ detection is a heuristic, thinking row's subject is borrowed from what came next
 3. **Where lane time went.** Band bar (working / waiting / lost / compacting), then the donut with its legend as a table
    beside it. Hovering a legend row lights its slice.
 4. **Who was alive, and when.** Swimlane, chip per workflow above it.
-5. **What the agents reached for.** Tool donut, strip of family shares over it, legend as a table beside it. Picking a
+5. **What the agents reached for.** Tool donut, strip of category shares over it, legend as a table beside it. Picking a
    slice or legend row filters the sheet below to that tool's rows and scrolls to it.
 6. **Every row.** The virtualized sheet.
 
@@ -62,20 +62,28 @@ Tool breakdown can't use kind colours: it counts calls by what they were, not st
 doing. So it has a second set, same file, and the page never puts the two in one chart. Each sits in its own section
 behind its own legend, chrome between them stays neutral, so neither reads as the other.
 
-Engine reports 16 tool classes, more than any palette keeps apart, so `classes.ts` maps them onto **seven families** and
-the chart colours by family. Not a rollup for its own sake: because the pie draws families in fixed order, each family
-is one contiguous arc and the chart says "37% of this session's calls were file work" before a reader touches the
-legend. Groups inside a family share its colour, told apart by the 2px surface ring between them, by the table beside
+Engine reports 16 tool classes, more than any palette keeps apart, so it folds them into **seven categories** and the
+chart colours by category. Not a rollup for its own sake: because the pie draws categories in a fixed order, each
+category is one contiguous arc and the chart says "37% of this session's calls were reading" before a reader touches the
+legend. Groups inside a category share its colour, told apart by the 2px surface ring between them, by the table beside
 the chart, and by the highlight the two share.
+
+**The taxonomy is served, not defined here.** `internal/timeline/category.go` owns the class-to-category mapping and the
+per-group overrides; the timeline response carries `toolCategories` (names, labels, descriptions, order) and a
+`category` on every group. `docs/api.md` § The two levels of "what kind of work was this" is the contract. The frontend
+holds only `categories.ts`, which maps a category name onto a CSS custom property, because a name is data and a hex
+value is design. An unknown name draws in the neutral and sorts last rather than throwing.
 
 Order is the colourblind-safety mechanism rather than a mood: it decides which pairs ever touch. Seven slots validated
 in both modes (2026-08-06), worst adjacent pair ΔE 8.7 light and 11.0 dark under protanopia and deuteranopia, 17.4 and
 19.2 under normal vision, every slot over 3:1 on its surface. Seventh slot is the neutral everything-else fold, so it
-sits below the chroma floor on purpose, and the two flags it draws are expected.
+sits below the chroma floor on purpose, and the two flags it draws are expected. **The order that was validated is the
+API's**, so reordering `Categories` in Go means re-deriving this.
 
-To re-run it, load the `dataviz` skill and run the `validate_palette.js` it ships, passing the slots in `FAMILY_ORDER`
-and **repeating the first one at the end**: a pie closes on itself, so the last slot touches the first, and a linear
-pairlist would miss that pair. The two calls that produced the numbers above, run from the skill's own base directory:
+To re-run it, load the `dataviz` skill and run the `validate_palette.js` it ships, passing the slots in the API's
+category order (`management`, `read`, `write`, `build`, `checks`, `qa`, `other`) and **repeating the first one at the
+end**: a pie closes on itself, so the last slot touches the first, and a linear pairlist would miss that pair. The two
+calls that produced the numbers above, run from the skill's own base directory:
 
 ```sh
 # light, against `--csa-surface`

@@ -15,6 +15,7 @@ import (
 
 	"github.com/vdavid/claude-session-analyzer/internal/agg"
 	"github.com/vdavid/claude-session-analyzer/internal/report"
+	"github.com/vdavid/claude-session-analyzer/internal/timeline"
 )
 
 // Source is one session's contribution to a query: its cube cells, plus the few things a session-level dimension needs
@@ -129,16 +130,19 @@ type Matched struct {
 
 // Key is what a group is keyed by. Only the dimensions the query grouped by are filled in; the rest are empty.
 type Key struct {
-	Kind    string `json:"kind,omitempty"`
-	Class   string `json:"class,omitempty"`
-	Group   string `json:"group,omitempty"`
-	Leaf    string `json:"leaf,omitempty"`
-	Tool    string `json:"tool,omitempty"`
-	Day     string `json:"day,omitempty"`
-	Lane    string `json:"lane,omitempty"`
-	Agent   string `json:"agent,omitempty"`
-	Session string `json:"session,omitempty"`
-	Project string `json:"project,omitempty"`
+	Kind string `json:"kind,omitempty"`
+	// Category is the coarse bucket a tool call falls in, derived from the class and the group by `internal/timeline`
+	// rather than stored on a cell, so a taxonomy change needs no new cache shape.
+	Category string `json:"category,omitempty"`
+	Class    string `json:"class,omitempty"`
+	Group    string `json:"group,omitempty"`
+	Leaf     string `json:"leaf,omitempty"`
+	Tool     string `json:"tool,omitempty"`
+	Day      string `json:"day,omitempty"`
+	Lane     string `json:"lane,omitempty"`
+	Agent    string `json:"agent,omitempty"`
+	Session  string `json:"session,omitempty"`
+	Project  string `json:"project,omitempty"`
 }
 
 // Group is one row of the answer, ordered by weight.
@@ -158,6 +162,8 @@ func (k Key) Value(dim Dim) string {
 	switch dim {
 	case DimKind:
 		return k.Kind
+	case DimCategory:
+		return k.Category
 	case DimClass:
 		return k.Class
 	case DimGroup:
@@ -184,6 +190,8 @@ func (k *Key) set(dim Dim, value string) {
 	switch dim {
 	case DimKind:
 		k.Kind = value
+	case DimCategory:
+		k.Category = value
 	case DimClass:
 		k.Class = value
 	case DimGroup:
@@ -297,6 +305,10 @@ func valueOf(dim Dim, cell agg.Cell, source Source) string {
 	switch dim {
 	case DimKind:
 		return cell.Kind
+	case DimCategory:
+		// Derived rather than read off the cell: a category is a pure function of the class and the group, both of which
+		// every cell already carries, so the taxonomy can move without a new stored field.
+		return string(timeline.CategoryOf(timeline.ToolClass(cell.Class), cell.Group))
 	case DimClass:
 		return cell.Class
 	case DimGroup:

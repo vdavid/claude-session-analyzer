@@ -81,7 +81,10 @@ claude-session-analyzer stats [<session-id>] \
   shell doesn't eat them: `--where 'group=codegraph*'`.
 - All waiting at once: `--where kind=waiting*`. A value with a comma in it needs `\,`.
 - No session id means every session; narrow with `--since`, `--until`, `--project`.
-- Dimensions: `kind`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, `project`.
+- Dimensions: `kind`, `category`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, `project`.
+- Tool calls at two levels: `category` is the coarse seven (`management`, `read`, `write`, `build`, `checks`, `qa`,
+  `other`), `class` is the sixteen under them. Ask "how much of this was checks" with `--group-by category`; reach for
+  `class` only when the coarse answer isn't enough.
 - `--vocabulary` lists every valid value. Read it rather than guessing between `checker` and `checker-script`.
 
 ## Worked answers

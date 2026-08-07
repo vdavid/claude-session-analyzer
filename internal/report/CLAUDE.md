@@ -12,6 +12,10 @@ code, so a caller learns one vocabulary. Contract: `docs/api.md`. Changing a tag
   this package is shaped to prevent. Definition and arithmetic: `docs/api.md`.
 - **`byKind` is a breakdown of lane time.** So is a group's share anywhere downstream: the kinds partition lane time and
   nothing else.
+- **A tool group carries both levels of "what kind of work".** `class` is the engine's 16, `category` is the seven a
+  legend can hold, derived by `timeline.CategoryOf` from the class and the group. `ToolCategories()` serves the ordered
+  list with labels on `Timeline`, not on `Totals`, because `Totals` is what a cached digest stores and a static list has
+  no business on disk 725 times. Adding `category` to a stored group is a `cache.Version` bump.
 - **A tool group reports three clocks, not one.** `seconds` is the tool running, `composingSeconds` is the agent writing
   the calls, `stalledSeconds` is a call that came back far too late. All three carry the group's name, so together they
   account for every row the grouping rule put in the group, and `report_test.go` holds them to that. A stall is still
@@ -28,8 +32,8 @@ code, so a caller learns one vocabulary. Contract: `docs/api.md`. Changing a tag
 
 ## Module map
 
-- `report.go`: every JSON struct, `ForSession`, `ForTimeline`, and the three reusable pieces a `stats` answer shares:
-  `TotalsFrom`, `KindTotals`, `ToolTotals`.
+- `report.go`: every JSON struct, `ForSession`, `ForTimeline`, `ToolCategories`, and the three reusable pieces a `stats`
+  answer shares: `TotalsFrom`, `KindTotals`, `ToolTotals`.
 - `report_test.go`: `TestTheLadderHoldsFromLaneTimeDownToActive` and
   `TestAToolGroupsThreeClocksAccountForEveryRowCarryingItsName` are the guards on five confusable durations. They run
   over a hand-built timeline holding a row of every kind, so a twelfth kind fails the test until someone decides which

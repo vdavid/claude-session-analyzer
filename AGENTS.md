@@ -47,8 +47,9 @@ Personal tool, published because it's generic. Only transcripts are private. Dua
   ordered records), `List` (summarizes every session by reading only the two ends of each transcript), and `Locations`
   (every session's files in one scan, because `Find` per session is quadratic).
 - `internal/timeline/`: `Lane` records become activity rows. Activity kinds (`Kinds` lists them, four are waits), tool
-  classification and naming (`Identify`), stall and timeout detection, waiting attribution. Rules in
-  `docs/timeline-rules.md`.
+  classification and naming (`Identify`, `Classes`), the seven tool categories the sixteen classes fold into
+  (`category.go`, and it's configuration rather than engine truth), stall and timeout detection, waiting attribution.
+  Rules in `docs/timeline-rules.md`.
 - `internal/agg/`: one cube every total rolls up from. Sums a timeline once by lane, agent, kind, class, group, leaf,
   tool, and local day; `RollUp` keeps whichever dimensions a caller asks for. `ToolRuns`, `Composing`, and `Stalls` are
   the rule that a tool's own clock is neither the agent composing the call nor a call that stalled.

@@ -1,17 +1,17 @@
 # stats/: one grammar over the cube
 
 Filter, group, add up. Every question an agent or a person asks about where the time went is the same sum over
-`internal/agg`'s cells, differing only in which cells it keeps and which dimensions it keeps them by. Ten dimensions
-(`kind`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, `project`), and they're both the
-`--group-by` values and the `--where` fields, so a caller learns one vocabulary.
+`internal/agg`'s cells, differing only in which cells it keeps and which dimensions it keeps them by. Eleven dimensions
+(`kind`, `category`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, `project`), and they're both
+the `--group-by` values and the `--where` fields, so a caller learns one vocabulary.
 
 ## Must-knows
 
-- **A tool question keeps a call's three clocks apart.** Naming `class`, `group`, `leaf`, or `tool` anywhere in a query
-  sets `Result.ToolClocksApart`: `Seconds` becomes the tool running, `ComposingSeconds` the agent writing the call, and
-  `StalledSeconds` a call that came back far too late. All three arrive on a cell carrying the tool's name, so one
-  number holding them reports the checker as costing what the agent and a suspended session cost, and the answer looks
-  perfectly reasonable. `TestAToolFilterCountsOnlyTheRowsTheToolRanIn` and
+- **A tool question keeps a call's three clocks apart.** Naming `category`, `class`, `group`, `leaf`, or `tool` anywhere
+  in a query sets `Result.ToolClocksApart`: `Seconds` becomes the tool running, `ComposingSeconds` the agent writing the
+  call, and `StalledSeconds` a call that came back far too late. All three arrive on a cell carrying the tool's name, so
+  one number holding them reports the checker as costing what the agent and a suspended session cost, and the answer
+  looks perfectly reasonable. `TestAToolFilterCountsOnlyTheRowsTheToolRanIn` and
   `TestAStalledCallIsReportedApartFromWhatTheToolCost` hold it. `Spec.IncludeComposingRows` opts out of the split.
 - **Rows and calls follow the split.** A composing row is neither a row nor a call of a tool question; a stalled run is
   both, because it was a call. Cells carrying no tool are dropped entirely (`agg.Cell.IsAboutATool`), or the answer
@@ -44,9 +44,12 @@ Filter, group, add up. Every question an agent or a person asks about where the 
   it before asking.
 - **Don't import `internal/cache`.** `Source` is the adapter, and the CLI fills it from a digest or, for a lane
   question, from the detail. This package stays a pure function over cells.
-- **The class list is a copy.** The engine declares its 16 tool classes in `internal/timeline/tool.go` and exports no
-  list of them, so `classes` in `spec.go` is a duplicate. `TestTheClassListMatchesTheEngines` reads that file and fails
-  with the name to add here.
+- **`category` is derived, never stored.** `valueOf` computes it with `timeline.CategoryOf` from a cell's class and
+  group, both of which every cell already carries, so the taxonomy can move without a new cache shape. A cell carrying
+  no tool has no category, which is what keeps a session's thinking and waiting out of a nameless bucket.
+- **Every vocabulary list comes from `internal/timeline`.** `Vocabulary` reads `timeline.Kinds`, `timeline.Categories`,
+  and `timeline.Classes`, so none of them can drift. `TestTheClassListMatchesTheEngines` reads `tool.go`'s source and
+  fails with the class name missing from `timeline.Classes`.
 - **A `\,` is a literal comma in a filter value.** The `waiting, reason unknown` kind carries the separator inside it,
   and would otherwise be the one value nobody can type. A glob is usually easier: `kind=waiting*` is all four waits.
 - **Messages are sentences with a next step in them**, and they never say "error" or "failed". They're read by agents as

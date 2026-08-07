@@ -62,9 +62,36 @@ type Timeline struct {
 	Session Session `json:"session"`
 	Totals  Totals  `json:"totals"`
 	Lanes   []Lane  `json:"lanes"`
+	// ToolCategories is the seven tool categories in legend order, so a consumer lays a legend out without hardcoding
+	// their names. It's the same list on every session, and it rides along here rather than in Totals because Totals is
+	// what a cached digest stores and a static list has no business on disk 725 times.
+	ToolCategories []ToolCategory `json:"toolCategories"`
 	// Rows is every activity row, sorted by start. It's empty when the caller asked for no rows, and Totals.Rows still
 	// says how many there were.
 	Rows []Row `json:"rows"`
+}
+
+// ToolCategory is one bucket of the tool breakdown, with the words a legend prints. The colour isn't here: a name is
+// data and a hex value is design, so the palette stays in the consumer's stylesheet, keyed by this name.
+type ToolCategory struct {
+	Category    string `json:"category"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+}
+
+// ToolCategories is the engine's category list, rendered for JSON. The order is the order a legend shows them in, and
+// the frontend's palette slots follow it, so it's load-bearing rather than cosmetic.
+func ToolCategories() []ToolCategory {
+	metas := timeline.CategoryList()
+	out := make([]ToolCategory, 0, len(metas))
+	for _, meta := range metas {
+		out = append(out, ToolCategory{
+			Category:    string(meta.Category),
+			Label:       meta.Label,
+			Description: meta.Description,
+		})
+	}
+	return out
 }
 
 // Totals is the aggregation a browser would otherwise do over 15,000 rows.
@@ -112,9 +139,13 @@ type KindTotal struct {
 // Seconds, ComposingSeconds, and StalledSeconds below, and `docs/api.md`.
 type ToolGroupTotal struct {
 	Group string `json:"group"`
-	// Class is what kind of work the group does, which is what colours it. Every tool in a group shares it.
+	// Class is what kind of work the group does, one of sixteen. Every tool in a group shares it.
 	Class string `json:"class"`
-	Calls int    `json:"calls"`
+	// Category is the coarse bucket the group falls in, one of the seven in ToolCategories, and what colours it: sixteen
+	// classes is more than a legend keeps apart. It's derived from the class and the group by `internal/timeline`, so a
+	// consumer never maps classes itself. Every tool in a group shares it, because the group is what it's keyed on.
+	Category string `json:"category"`
+	Calls    int    `json:"calls"`
 	// Seconds is the tool running: its own wall clock, including anything the tool waited on. The other two clocks are
 	// out of it.
 	Seconds float64 `json:"seconds"`
@@ -240,10 +271,11 @@ func ForTimeline(sum session.Summary, tl *timeline.Timeline, withRows bool) Time
 	cube := agg.Build(tl, agg.Options{})
 
 	body := Timeline{
-		Session: ForSession(sum),
-		Totals:  TotalsFrom(cube.Cells()),
-		Lanes:   make([]Lane, 0, len(tl.Lanes)),
-		Rows:    []Row{},
+		Session:        ForSession(sum),
+		Totals:         TotalsFrom(cube.Cells()),
+		Lanes:          make([]Lane, 0, len(tl.Lanes)),
+		ToolCategories: ToolCategories(),
+		Rows:           []Row{},
 	}
 	body.Totals.From = nilable(tl.First)
 	body.Totals.Until = nilable(tl.Last)
@@ -389,6 +421,7 @@ func ToolTotals(cells []agg.Cell) []ToolGroupTotal {
 		out = append(out, ToolGroupTotal{
 			Group:            group.Group,
 			Class:            group.Class,
+			Category:         string(timeline.CategoryOf(timeline.ToolClass(group.Class), group.Group)),
 			Calls:            group.Calls,
 			Seconds:          Seconds(group.Duration - other.stalled),
 			ComposingSeconds: Seconds(other.composing),

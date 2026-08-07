@@ -345,7 +345,11 @@ func writeVocabulary(a *app, asJSON bool) error {
 	}
 	fmt.Fprintf(a.out, "Dimensions, for `--group-by` and as `--where` fields:\n  %s\n\n", join(vocab.Dims))
 	fmt.Fprintf(a.out, "Activity kinds (`--where kind=...`):\n  %s\n\n", strings.Join(vocab.Kinds, ", "))
-	fmt.Fprintf(a.out, "Tool classes (`--where class=...`):\n  %s\n\n", strings.Join(vocab.Classes, ", "))
+	// Two levels of the same thing, coarse first, so a reader picks the one their question is at rather than guessing
+	// which of the sixteen classes a "check" is.
+	fmt.Fprintf(a.out, "Tool categories (`--where category=...`):\n  %s\n\n", strings.Join(vocab.Categories, ", "))
+	fmt.Fprintf(a.out, "Tool classes, the finer level under the categories (`--where class=...`):\n  %s\n\n",
+		strings.Join(vocab.Classes, ", "))
 	fmt.Fprintf(a.out, "Groups, leaves, and tools are whatever a session used. "+
 		"`%s stats <id> --group-by group` lists the ones it reached for.\n", binary)
 	return nil

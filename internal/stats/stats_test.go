@@ -2,6 +2,7 @@ package stats_test
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -618,5 +619,80 @@ func TestAHandBuiltSpecNamingSomethingUnknownIsRefused(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), string(stats.DimSession)) {
 		t.Errorf("the message should list the dimensions, got %q", err)
+	}
+}
+
+// TestGroupingByCategoryFoldsTheClassesIntoTheSevenBuckets is the taxonomy arriving as a query dimension. It's derived
+// from a cell's class and group by `internal/timeline`, so nothing here keeps a copy of the mapping.
+func TestGroupingByCategoryFoldsTheClassesIntoTheSevenBuckets(t *testing.T) {
+	result := run(t, stats.Spec{GroupBy: []stats.Dim{stats.DimCategory}}, corpus())
+
+	got := map[string]float64{}
+	for _, g := range result.Groups {
+		got[g.Category] = g.Seconds
+	}
+	want := map[string]float64{
+		// Both sessions' `pnpm check` runs.
+		"checks": 180,
+		// Two `Grep` calls and two codegraph calls, which the override puts here rather than under an MCP bucket.
+		"read": 12,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("categories = %v, want %v", got, want)
+	}
+	for category, seconds := range want {
+		if got[category] != seconds {
+			t.Errorf("%s = %v s, want %v s", category, got[category], seconds)
+		}
+	}
+	if !result.ToolClocksApart {
+		t.Error("a category question is a question about tools, so the three clocks have to be kept apart")
+	}
+}
+
+func TestFilteringOnCategoryKeepsTheGroupsInIt(t *testing.T) {
+	result := run(t, stats.Spec{
+		Where:   []stats.Clause{{Field: stats.DimCategory, Values: []string{"read"}}},
+		GroupBy: []stats.Dim{stats.DimGroup},
+	}, corpus())
+
+	var groups []string
+	for _, g := range result.Groups {
+		groups = append(groups, g.Group)
+	}
+	want := []string{"codegraph (MCP)", "Grep"}
+	if len(groups) != len(want) {
+		t.Fatalf("groups = %v, want %v", groups, want)
+	}
+	for _, group := range want {
+		if !slices.Contains(groups, group) {
+			t.Errorf("%q is in the read category and didn't come back: got %v", group, groups)
+		}
+	}
+}
+
+// TestARowCarryingNoToolNeverLandsInACategory keeps the thinking and the waiting out of a category answer. A category is
+// a fact about a tool call, and a nameless bucket holding most of a session's clock is the failure this guards.
+func TestARowCarryingNoToolNeverLandsInACategory(t *testing.T) {
+	result := run(t, stats.Spec{GroupBy: []stats.Dim{stats.DimCategory}}, corpus())
+	for _, g := range result.Groups {
+		if g.Category == "" {
+			t.Errorf("a nameless category group came back holding %v s over %d rows", g.Seconds, g.Rows)
+		}
+	}
+}
+
+func TestTheVocabularyPrintsTheCategories(t *testing.T) {
+	vocab := stats.Vocabulary()
+	if len(vocab.Categories) != len(timeline.Categories) {
+		t.Fatalf("the vocabulary lists %d categories, the engine has %d", len(vocab.Categories), len(timeline.Categories))
+	}
+	for i, name := range vocab.Categories {
+		if name != string(timeline.Categories[i]) {
+			t.Errorf("position %d: vocabulary says %q, the engine says %q", i, name, timeline.Categories[i])
+		}
+	}
+	if !slices.Contains(vocab.Dims, stats.DimCategory) {
+		t.Errorf("`category` isn't in the dimension list, so nothing tells a caller it can be named: %v", vocab.Dims)
 	}
 }

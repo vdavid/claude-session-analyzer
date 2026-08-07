@@ -20,7 +20,7 @@
     import KindPie from '$lib/components/charts/KindPie.svelte'
     import Swimlane from '$lib/components/charts/Swimlane.svelte'
     import ToolPie from '$lib/components/charts/ToolPie.svelte'
-    import { familyStyle } from '$lib/classes'
+    import { categoryVar } from '$lib/categories'
     import {
         formatBytes,
         formatCount,
@@ -116,7 +116,9 @@
     const kinds = $derived(slices.map((s) => s.kind))
     let highlight = $state<number | null>(null)
 
-    const tools = $derived(toolBreakdown(totals?.byTool ?? []))
+    const tools = $derived(toolBreakdown(totals?.byTool ?? [], aggregates?.toolCategories ?? []))
+    /** What each category holds, as the API described it, for the strip's tooltips. */
+    const descriptions = $derived(new Map((aggregates?.toolCategories ?? []).map((c) => [c.category, c.description])))
     let toolHighlight = $state<number | null>(null)
     /** The group the sheet is filtered to. Set by a click on a slice or a legend row. */
     let toolFilter = $state('')
@@ -336,16 +338,16 @@
 
                 <div class="card mt-4 p-5">
                     <ul class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                        {#each tools.families as family (family.family)}
-                            {@const style = familyStyle(family.family)}
-                            <li class="flex items-center gap-1.5 text-xs" title={style.description}>
+                        {#each tools.categories as category (category.category)}
+                            {@const described = descriptions.get(category.category)}
+                            <li class="flex items-center gap-1.5 text-xs" title={described}>
                                 <span
                                     class="size-2.5 shrink-0 rounded-[3px]"
-                                    style:background-color={`var(${style.cssVar})`}
+                                    style:background-color={`var(${categoryVar(category.category)})`}
                                 ></span>
-                                <span class="text-ink-muted">{style.label}</span>
+                                <span class="text-ink-muted">{category.label}</span>
                                 <span class="tnum font-mono text-ink-faint">
-                                    {formatShare(family.calls, tools.calls)}
+                                    {formatShare(category.calls, tools.calls)}
                                 </span>
                             </li>
                         {/each}
@@ -363,6 +365,7 @@
                         <ToolLegend
                             slices={tools.slices}
                             calls={tools.calls}
+                            categories={tools.categories}
                             selected={toolFilter}
                             onHover={(index) => (toolHighlight = index)}
                             onSelect={showTool}

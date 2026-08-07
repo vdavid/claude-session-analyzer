@@ -168,9 +168,70 @@ func TestStatsListsItsVocabularyWithoutReadingATranscript(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d, stderr: %s", code, stderr)
 	}
-	for _, want := range []string{"kind", "class", "leaf", "thinking", "waiting for a person", "checker", "mcp"} {
+	for _, want := range []string{"kind", "category", "class", "leaf", "thinking", "waiting for a person",
+		"checker", "mcp", "management", "checks", "qa"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("wanted %q in the vocabulary:\n%s", want, stdout)
+		}
+	}
+}
+
+// TestStatsGroupsByCategory covers the coarse half of the tool taxonomy through the whole command line, because that's
+// the level people ask at ("how much of this was checks").
+func TestStatsGroupsByCategory(t *testing.T) {
+	isolate(t)
+	code, stdout, stderr := run(t, "stats", goldenID, "--root", goldenRoot(), "--group-by", "category", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, stderr)
+	}
+
+	var body struct {
+		Groups []struct {
+			Category string  `json:"category"`
+			Calls    int     `json:"calls"`
+			Seconds  float64 `json:"seconds"`
+		} `json:"groups"`
+		ToolClocksApart bool `json:"toolClocksApart"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &body); err != nil {
+		t.Fatalf("the answer isn't JSON: %v\n%s", err, stdout)
+	}
+	if len(body.Groups) == 0 {
+		t.Fatalf("the fixture session called tools, so at least one category has to come back:\n%s", stdout)
+	}
+	if !body.ToolClocksApart {
+		t.Errorf("a category question is about tools, so the three clocks have to be kept apart:\n%s", stdout)
+	}
+	for _, g := range body.Groups {
+		if g.Category == "" {
+			t.Errorf("a group came back with no category, which means a row carrying no tool was folded in:\n%s", stdout)
+		}
+	}
+}
+
+func TestStatsFiltersByCategory(t *testing.T) {
+	isolate(t)
+	code, stdout, stderr := run(t, "stats", goldenID, "--root", goldenRoot(),
+		"--where", "category=checks", "--group-by", "group", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, stderr)
+	}
+
+	var body struct {
+		Groups []struct {
+			Group string `json:"group"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &body); err != nil {
+		t.Fatalf("the answer isn't JSON: %v\n%s", err, stdout)
+	}
+	if len(body.Groups) == 0 {
+		t.Fatalf("the fixture session runs the checker, so filtering to checks has to keep something:\n%s", stdout)
+	}
+	for _, g := range body.Groups {
+		// Every group in this bucket is a checker, a test, or a lint run, and the fixture's are all Bash.
+		if !strings.HasPrefix(g.Group, "Bash (") {
+			t.Errorf("%q isn't a checks group in this fixture:\n%s", g.Group, stdout)
 		}
 	}
 }

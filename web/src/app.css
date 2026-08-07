@@ -47,25 +47,28 @@
     --csa-kind-stalled: #a6357a;
     --csa-kind-compacting: #5f6b7a;
 
-    /* Tool families. The second colour vocabulary on the page, and the only one: the tool breakdown
+    /* Tool categories. The second colour vocabulary on the page, and the only one: the tool breakdown
        colours a call by the kind of work it does, where the charts above colour a stretch of time by
        the activity kind. Each lives in its own section behind its own legend, and the chrome between
        them stays neutral, so neither reads as the other.
 
-       Seven slots in a fixed order, which is the colourblind-safety mechanism rather than a mood: the
-       pie draws them in this order, so these are the pairs that ever touch. Validated against the
-       `dataviz` skill's checks in both modes (2026-08-06): worst adjacent pair ΔE 8.7 light / 11.0
-       dark under protanopia and deuteranopia, 17.4 / 19.2 under normal vision, every slot over 3:1 on
-       its surface. Re-run the validator before changing one, and keep the order. `--csa-tool-shell`
-       is the deliberate neutral that everything unremarkable folds into, so it sits below the chroma
-       floor on purpose. */
-    --csa-tool-teamwork: #b5308a;
-    --csa-tool-files: #2f6fc4;
-    --csa-tool-gates: #2f7d4f;
-    --csa-tool-vcs: #7b4fd0;
-    --csa-tool-search: #10a094;
-    --csa-tool-services: #c9611b;
-    --csa-tool-shell: #828b98;
+       The seven names come from the API (`docs/api.md`), which also fixes the order the pie draws them
+       in. Only the hex values are ours: a category name is data, a colour is design.
+
+       That order is the colourblind-safety mechanism rather than a mood, because it decides which
+       pairs ever touch. Validated against the `dataviz` skill's checks in both modes (2026-08-06, the
+       same seven values in the same positions): worst adjacent pair ΔE 8.7 light / 11.0 dark under
+       protanopia and deuteranopia, 17.4 / 19.2 under normal vision, every slot over 3:1 on its
+       surface. Re-run the validator before changing a value, and re-derive it if the engine ever
+       reorders `Categories`. `--csa-tool-other` is the deliberate neutral that everything unremarkable
+       folds into, so it sits below the chroma floor on purpose. */
+    --csa-tool-management: #b5308a;
+    --csa-tool-read: #2f6fc4;
+    --csa-tool-write: #2f7d4f;
+    --csa-tool-build: #7b4fd0;
+    --csa-tool-checks: #10a094;
+    --csa-tool-qa: #c9611b;
+    --csa-tool-other: #828b98;
 
     /* Roll-ups the summary bar and the swimlane use. */
     --csa-band-work: #2f6fc4;
@@ -102,13 +105,13 @@
 
         /* Dark is stepped from the same hues rather than brightened from the light values: the band a
            colour has to sit in moves with the surface. */
-        --csa-tool-teamwork: #cf5a9b;
-        --csa-tool-files: #4f8fd8;
-        --csa-tool-gates: #3fa76a;
-        --csa-tool-vcs: #8a72e0;
-        --csa-tool-search: #1aa892;
-        --csa-tool-services: #d97430;
-        --csa-tool-shell: #a8b1bd;
+        --csa-tool-management: #cf5a9b;
+        --csa-tool-read: #4f8fd8;
+        --csa-tool-write: #3fa76a;
+        --csa-tool-build: #8a72e0;
+        --csa-tool-checks: #1aa892;
+        --csa-tool-qa: #d97430;
+        --csa-tool-other: #a8b1bd;
 
         --csa-band-work: #6fa8ec;
         --csa-band-wait: #e8843c;

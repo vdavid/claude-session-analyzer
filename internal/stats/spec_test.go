@@ -174,8 +174,9 @@ func TestTheVocabularyIsEverythingAQueryCanName(t *testing.T) {
 	}
 }
 
-// The engine exports no list of its tool classes, so this package copies one. Reading the engine's source is how the
-// copy stays honest: add a class there and this fails with the name to add here.
+// The vocabulary reads `timeline.Classes`, and that list is hand-written beside the constants it names. Reading the
+// engine's source is what holds the two together: declare a class there without adding it to `Classes` and this fails
+// with the name that's missing.
 func TestTheClassListMatchesTheEngines(t *testing.T) {
 	source, err := os.ReadFile("../timeline/tool.go")
 	if err != nil {

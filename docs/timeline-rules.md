@@ -224,6 +224,35 @@ Two things a leaf has to see through, both found by reading reference session's 
   `nohup`, so `timeout 120 cargo test` is a test run. It had been hiding a 21-minute `cargo nextest` and a
   `npx playwright` run inside "shell".
 
+### Categories are configuration, classes are derivation
+
+Sixteen classes is more than a legend keeps apart or a reader holds in their head, so seven **categories** sit over
+them: `management`, `read`, `write`, `build`, `checks`, `qa`, `other`. `internal/timeline/category.go` owns the mapping
+and `docs/api.md` § The two levels of "what kind of work was this" is the served contract.
+
+The line between the two is worth holding. A class is **derived**: it's read off a call's own arguments and defensible
+from the transcript alone. A category is a **judgement about what the work was for in one person's workflow**, and no
+amount of transcript proves it. So the mapping is deliberately a flat, reviewable list rather than logic, each override
+carrying its reason, and it's fine for someone else's copy of this tool to disagree with it.
+
+The cases the class can't express are keyed on the **group** name, because that's the only place the distinction exists:
+
+- `codegraph (MCP)` is `read`, because it's how the agents read a codebase. `tauri (MCP)` and `chrome-devtools (MCP)`
+  are `qa`, because they drive the product. All three are the same `mcp` class.
+- `WebFetch` and `WebSearch` are `other`: research rather than QA, though they share `web` with a `curl` against a dev
+  server, which stays `qa`.
+- An MCP server with no override is `other`, not `qa`. Gmail, Sheets, and Calendar arrive as MCP servers and none of
+  them is QA, so guessing QA for an unknown server would be wrong more often than right.
+
+A row carrying no class gets no category at all. Thinking and waiting are most of a session's clock and none of it is
+tool work, so defaulting them would put a session's waiting in a bucket about tools.
+
+**Why `pnpm lint` stays a `checker` rather than a `lint`.** It reads oddly next to `cargo clippy`, and it's deliberate:
+a runner script is whatever a project defined it as, and one called `lint` routinely runs several tools (a clippy and a
+formatter and a typechecker), so calling it a lint would claim it's one tool doing one thing. `isCheckerScript` reads
+the same table to spot a `bin/lint` reached by path, so the two can't be split without either duplicating the list or
+losing that. Both land in `checks` either way, which is the level the question gets asked at.
+
 ### A wait is attributed by the record that ended it
 
 The record that arrived is the signal: a teammate's message (read from the harness's envelope, which carries sender's

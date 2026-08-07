@@ -17,16 +17,18 @@ doesn't; a swimlane bar drawn one hour too wide looks exactly like a correct one
   producing during it, so area under the trace equals the lane time behind it.
 - **`kindSlices` keeps legend order, not size order**, so a colour means the same thing on every session and the four
   waits stay adjacent.
-- **`toolBreakdown` counts calls, never seconds**, and orders by family for the same reason. A pie of tool seconds says
-  what the machine was busy with; a `pnpm check` is minutes and a codegraph lookup is a second. Family order also makes
-  each family one contiguous arc, the fixed adjacency the palette was validated against.
+- **`toolBreakdown` counts calls, never seconds**, and orders by tool category for the same reason. A pie of tool
+  seconds says what the machine was busy with; a `pnpm check` is minutes and a codegraph lookup is a second. Category
+  order also makes each category one contiguous arc, the fixed adjacency the palette was validated against.
+- **The category order is an argument, not knowledge here.** It arrives on the API's `toolCategories`, and a category
+  the API never listed sorts after every listed one rather than being dropped.
 
 ## Module map
 
 - `swimlane.ts`: `busySegments` (span minus gaps), `buildSwimlane` (lead, then workflows, then direct lanes).
 - `concurrency.ts`: lanes producing at once, bucketed over the session's span.
 - `pie.ts`: `kindSlices` for the donut and its legend, `bandTotals` for the working / waiting / lost / compacting bar.
-- `tools.ts`: `toolBreakdown`, the API's tool groups ordered for the tool donut, family arcs over them.
+- `tools.ts`: `toolBreakdown`, the API's tool groups ordered for the tool donut, category arcs over them.
 
 Everything takes milliseconds since the epoch, what ECharts' time axis reads. Instants stay strings until they cross
 into here.

@@ -108,8 +108,13 @@ export interface TimelineTotals {
  */
 export interface ToolGroupTotal {
     group: string
-    /** What kind of work the group does. `classes.ts` turns it into the colour and the family. */
+    /** What kind of work the group does, one of sixteen. The finer level under `category`. */
     class: string
+    /**
+     * The coarse bucket the group falls in, one of the seven in `toolCategories`, and what colours it.
+     * The engine derives it, so nothing here maps classes onto buckets of its own.
+     */
+    category: string
     calls: number
     seconds: number
     /** How many lanes reached for it, which is the answer to "who used this". */
@@ -132,10 +137,26 @@ export interface ToolTotal {
     timedOut?: number
 }
 
+/**
+ * One bucket of the tool breakdown, with the words a legend prints.
+ *
+ * The colour isn't here: `categories.ts` keys the palette off `category`.
+ */
+export interface ToolCategory {
+    category: string
+    label: string
+    description: string
+}
+
 export interface TimelineResponse {
     session: SessionSummary
     totals: TimelineTotals
     lanes: Lane[]
+    /**
+     * The seven tool categories in legend order. The same list on every session, and the order the
+     * palette's adjacency was validated in.
+     */
+    toolCategories: ToolCategory[]
     /** Absent when the timeline was fetched with `?rows=false`. */
     rows?: TimelineRow[]
 }

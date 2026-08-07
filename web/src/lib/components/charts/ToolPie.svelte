@@ -6,10 +6,10 @@
      * second, so a pie of seconds would say what the machine was busy with rather than what the
      * agents reached for. The seconds are in the legend, where they read as what they are.
      *
-     * Slices sit in family order, so each family is one contiguous arc and a colour means the same
-     * thing on every session (`src/lib/transform/tools.ts`). Groups inside a family share their
-     * family's colour and are told apart by the 2px surface ring between them, by the legend beside
-     * the chart, and by the highlight the two share.
+     * Slices sit in the category order the API serves, so each category is one contiguous arc and a
+     * colour means the same thing on every session (`src/lib/transform/tools.ts`). Groups inside a
+     * category share its colour and are told apart by the 2px surface ring between them, by the legend
+     * beside the chart, and by the highlight the two share.
      */
     import { formatCount, formatDuration, formatShare } from '$lib/format'
     import { theme } from '$lib/theme.svelte'
@@ -63,7 +63,7 @@
                 data: slices.map((s) => ({
                     name: s.group,
                     value: s.calls,
-                    itemStyle: { color: palette.family[s.family] ?? palette.chrome.inkFaint },
+                    itemStyle: { color: palette.category[s.category] ?? palette.chrome.inkFaint },
                 })),
             },
         ],

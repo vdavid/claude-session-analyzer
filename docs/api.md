@@ -73,6 +73,13 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
 ```json
 {
     "session": { "…": "the object above" },
+    "toolCategories": [
+        {
+            "category": "read",
+            "label": "Read",
+            "description": "Reading files, listing directories, searching, and the tools the agents read a codebase with."
+        }
+    ],
     "totals": {
         "from": "2026-08-03T08:42:19.17Z",
         "until": "2026-08-06T13:35:31.642Z",
@@ -87,6 +94,7 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
             {
                 "group": "codegraph (MCP)",
                 "class": "mcp",
+                "category": "read",
                 "calls": 4,
                 "seconds": 3.427,
                 "composingSeconds": 6.963,
@@ -224,6 +232,30 @@ first, each holding the exact tools inside it.
   its tools'.
 - `errors` and `timedOut` are left out when they're zero. `class` is the same string a row carries, and every tool in a
   group shares it.
+
+#### The two levels of "what kind of work was this"
+
+`class` is the fine one, 16 values (`docs/timeline-rules.md`). `category` is the coarse one, seven, and it's what a
+legend and a colour go by: 16 is more than a palette keeps apart or a reader holds in their head.
+
+- **The mapping is served, so a consumer never derives it.** Every group carries its `category`, and `toolCategories` at
+  the top level is the seven of them in the order a legend shows them, each with a `label` in sentence case and a
+  `description` of what's in it. That's what lets a consumer lay a legend out without hardcoding seven names. Same list
+  on every session, so it's ~500 bytes.
+- **The order is load-bearing.** The frontend assigns its palette slots in it, and those were validated for
+  colourblind-safe adjacency as a closed ring (`docs/frontend.md`). Reordering `Categories` in `internal/timeline`
+  changes which colours touch.
+- **A category isn't inferable from a class alone**, which is why the engine owns it. `codegraph (MCP)` and
+  `google-sheets (MCP)` are both `mcp` and land in `read` and `other`; `WebFetch` and a `curl` against a dev server are
+  both `web` and land in `other` and `qa`. Those are overrides keyed on the group name, listed with their reasons in
+  `internal/timeline/category.go`, and they're **configuration**: they encode how one person works, not something a
+  transcript can prove.
+- Categories in order, with what falls in each by default: `management` (agent, git, ask), `read` (file read, search),
+  `write` (file write), `build` (build, dev server), `checks` (test, checker, lint), `qa` (web), `other` (mcp, wait,
+  shell, other). An MCP server with no override is `other` rather than `qa`, because Gmail and Sheets are MCP servers
+  and guessing QA for an unknown one would be wrong more often than right.
+- No colour is served. A category name is data and a hex value is design, so the palette stays in the consumer.
+- The CLI's `stats --group-by category` answers over the whole corpus with the same taxonomy: `docs/stats.md`.
 - Every row carrying a `tool` also carries `toolGroup`, so a consumer can filter to a slice's rows without re-deriving
   the grouping rule. The leaf isn't on the row: nothing filters by it, and the breakdown already carries the leaves.
 - A session that never called a tool gets `[]`.

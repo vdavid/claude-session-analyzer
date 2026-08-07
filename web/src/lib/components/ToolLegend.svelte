@@ -10,22 +10,26 @@
      * A row is a button rather than a link: clicking one filters the sheet below to that group's
      * rows, and hovering lights its slice.
      */
-    import { classStyle } from '$lib/classes'
+    import { categoryVar } from '$lib/categories'
     import { formatCount, formatDuration, formatShare } from '$lib/format'
-    import type { ToolSlice } from '$lib/transform/tools'
+    import type { CategorySlice, ToolSlice } from '$lib/transform/tools'
 
     interface Props {
         slices: ToolSlice[]
         calls: number
+        /** The categories present, so a row can name and describe the bucket it sits in. */
+        categories: CategorySlice[]
         /** The group the sheet below is filtered to, so the table can show which row is doing it. */
         selected?: string
         onHover?: (index: number | null) => void
         onSelect?: (group: string) => void
     }
 
-    const { slices, calls, selected = '', onHover, onSelect }: Props = $props()
+    const { slices, calls, categories, selected = '', onHover, onSelect }: Props = $props()
 
     let opened = $state<string>('')
+
+    const labels = $derived(new Map(categories.map((c) => [c.category, c.label])))
 
     function toggle(group: string) {
         opened = opened === group ? '' : group
@@ -33,7 +37,7 @@
 </script>
 
 <table class="w-full text-sm">
-    <caption class="sr-only">Tool calls by tool, most-used family first</caption>
+    <caption class="sr-only">Tool calls by tool, grouped by category</caption>
     <thead>
         <tr class="border-b border-border-base text-left">
             <th scope="col" class="eyebrow pb-1.5 font-normal">Tool</th>
@@ -45,7 +49,7 @@
     </thead>
     <tbody>
         {#each slices as slice, i (slice.group)}
-            {@const style = classStyle(slice.className)}
+            {@const label = labels.get(slice.category) ?? slice.category}
             {@const isOpen = opened === slice.group}
             <tr
                 class="border-b border-border-base last:border-0 hover:bg-sunken"
@@ -55,12 +59,14 @@
             >
                 <th scope="row" class="py-1.5 pr-3 text-left font-normal">
                     <span class="flex items-center gap-2">
-                        <span class="size-2.5 shrink-0 rounded-[3px]" style:background-color={`var(${style.cssVar})`}
+                        <span
+                            class="size-2.5 shrink-0 rounded-[3px]"
+                            style:background-color={`var(${categoryVar(slice.category)})`}
                         ></span>
                         <button
                             type="button"
                             class="truncate text-left text-ink hover:text-accent hover:underline hover:underline-offset-2"
-                            title={`Show only this group's rows. ${style.label}: ${style.description}`}
+                            title={`Show only this group's rows. ${label}, ${slice.className}.`}
                             onclick={() => onSelect?.(slice.group)}
                         >
                             {slice.group}

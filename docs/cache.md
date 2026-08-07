@@ -23,7 +23,8 @@ Nothing else is cached. The HTTP API still parses on request.
 Both measured 2026-08-07.
 
 Both hold `agg` cube cells at grain kind, class, group, leaf, tool, day. A query rolls them up further with the same
-`agg.RollUp` that built them, so a cached answer and a fresh parse can't disagree.
+`agg.RollUp` that built them, so a cached answer and a fresh parse can't disagree. A cell carries no `category`: it's a
+pure function of class and group, so `stats` derives it on read and a taxonomy change needs no new stored field.
 
 **Rows are never cached.** They'd be 350 to 400 MB of JSON over the corpus (estimated from the reference session's 6.5
 MB against its 67 MB transcript), they're useless to a corpus query, and re-deriving one session's rows is about a

@@ -14,12 +14,12 @@ import (
 //
 // Adding one means three edits elsewhere in the same change, and a fourth where it applies:
 //
+//   - `Classes` below, which is the list every surface reads. Fails loudly:
+//     TestTheClassListMatchesTheEngines scans this file for the declarations and says what to add.
+//   - `classCategories` in `category.go`, which says which of the seven categories the class belongs to. Fails loudly:
+//     TestEveryClassHasACategory names the class that's missing.
 //   - `precedence` below, if a command can be read as it. One that isn't in there can never outrank the `ClassShell` a
 //     command starts out as, so it would be mapped and then never returned. Silent.
-//   - `classes` in `internal/stats/spec.go`, which is what `--vocabulary` prints. This is the one that fails loudly:
-//     TestTheClassListMatchesTheEngines reads this file and says what to add.
-//   - `CLASS_FAMILIES` in `web/src/lib/classes.ts`, which maps every class onto the colour the tool breakdown draws it
-//     in. A class missing from that map is drawn as "Everything else" rather than reported. Silent.
 //   - `stallThreshold` in `stall.go`, if the work legitimately runs for hours, or a long honest call gets called a
 //     stall.
 type ToolClass string
@@ -62,6 +62,14 @@ const (
 	// ClassOther is a tool this package doesn't recognise.
 	ClassOther ToolClass = "other"
 )
+
+// Classes is every class the engine can label a call with, in the order declared above. It's what `--vocabulary`
+// prints, what the category table is held to being complete against, and the only list of them: a surface that wants
+// them all reads this rather than keeping a copy that drifts.
+var Classes = []ToolClass{
+	ClassChecker, ClassBuild, ClassLint, ClassTest, ClassDevServer, ClassWait, ClassGit, ClassSearch,
+	ClassFileRead, ClassFileWrite, ClassAgent, ClassAsk, ClassMCP, ClassWeb, ClassShell, ClassOther,
+}
 
 // precedence orders the classes by how much of a command's time they explain, costliest first. A compound command is
 // named after the highest class in it, so `git add -A && pnpm check` is a checker run and `cargo build | grep error`
@@ -209,6 +217,10 @@ const leafLimit = 60
 // for the legend row under it.
 type ToolID struct {
 	Class ToolClass
+	// Category is the coarse bucket the call falls in, one of seven. It's derived from the class and the group, so every
+	// surface gets it from here rather than mapping classes itself. `category.go` says what it means and why the mapping
+	// is configuration rather than engine truth.
+	Category ToolCategory
 	// Group is the slice a breakdown draws: `Bash (git)`, `codegraph (MCP)`, `Read`.
 	Group string
 	// Leaf is the exact thing that ran inside the group: `git commit`, `codegraph_search`, `Read`.
@@ -221,6 +233,17 @@ func Classify(b transcript.Block) ToolClass { return Identify(b).Class }
 // Identify reads a tool call once and says everything the derivation knows about what it was: its class, and the two
 // names a breakdown groups it by.
 func Identify(b transcript.Block) ToolID {
+	return withCategory(identify(b))
+}
+
+// withCategory fills the category in from the class and the group, so the one mapping runs on every path out of
+// identify and a new path can't forget it.
+func withCategory(id ToolID) ToolID {
+	id.Category = CategoryOf(id.Class, id.Group)
+	return id
+}
+
+func identify(b transcript.Block) ToolID {
 	name := b.ToolName
 
 	if class, ok := toolClasses[name]; ok {

@@ -17,19 +17,25 @@ claude-session-analyzer stats [<session-id>] [flags]
 - Quote a glob in a shell that expands one: `--where 'group=codegraph*'`.
 - `--group-by <dim>[,<dim>]`. Order is the order the keys come back in.
 - `--top N` bounds the output, `--json` for the machine-readable answer, `--no-cache` to bypass `docs/cache.md`.
-- `--vocabulary` prints every valid dimension, kind, and class. An agent guessing between `checker` and `checker-script`
-  guesses wrong.
+- `--vocabulary` prints every valid dimension, kind, category, and class. An agent guessing between `checker` and
+  `checker-script` guesses wrong.
 
 ## Dimensions
 
 Both the `--group-by` values and the `--where` fields:
 
-`kind`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, `project`.
+`kind`, `category`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, `project`.
 
 - `kind` is one of the 11 in `internal/timeline/kind.go`. Four of them are waits.
-- `class` is what work a call was doing, `group` is the slice a breakdown draws (`Bash (checker)`, `codegraph (MCP)`),
-  `leaf` is the exact thing inside it (`pnpm check`, `codegraph_search`), `tool` is the raw harness name. Rules:
-  `docs/timeline-rules.md`.
+- The four tool dimensions run coarse to raw: `category` is one of seven buckets (`management`, `read`, `write`,
+  `build`, `checks`, `qa`, `other`), `class` is what work a call was doing (16 of them), `group` is the slice a
+  breakdown draws (`Bash (checker)`, `codegraph (MCP)`), `leaf` is the exact thing inside it (`pnpm check`,
+  `codegraph_search`), and `tool` is the raw harness name. Rules: `docs/timeline-rules.md`; the class-to-category
+  mapping and its overrides: `docs/api.md` § The two levels of "what kind of work was this".
+- **`category` is the level people ask at.** "How much of this was checks" is one query; asking it by `class` means
+  knowing that `checker`, `test`, and `lint` are the three that count and `cargo check` is a lint. It's a tool dimension
+  like the other three, so naming it splits a call's three clocks apart (the trap below), and a row carrying no tool
+  never lands in a category at all.
 - `day` is a local date. A session spanning three days contributes to three, split at local midnight, so "July" is exact
   even when a session straddles the boundary.
 - `lane` and `agent` need tier two of the cache and cost more to load. A query naming neither never reads it.
@@ -105,6 +111,18 @@ Checker time, and how many runs:
 
 ```sh
 claude-session-analyzer stats 532ac591 --where class=checker --group-by leaf --json
+```
+
+Where a corpus's tool calls went, at the level a person asks about:
+
+```sh
+claude-session-analyzer stats --group-by category --top 10
+```
+
+Which groups make up one of those buckets:
+
+```sh
+claude-session-analyzer stats --where category=read --group-by group --top 8
 ```
 
 Whether the agents reached for codegraph or for grep, over a year:
