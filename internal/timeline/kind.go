@@ -29,10 +29,11 @@ const (
 	// KindWaitingForPerson is a gap a person closed: a prompt typed or queued, or an answer to a question the agent
 	// asked.
 	KindWaitingForPerson Kind = "waiting for a person"
-	// KindWaitingForTeammate is a gap another agent's message closed, read off the envelope the harness wraps it in.
+	// KindWaitingForTeammate is a gap another agent closed: its message, read off the envelope the harness wraps it in,
+	// or the notification of a background task it had left running while it was still alive. See attributeTaskWaits.
 	KindWaitingForTeammate Kind = "waiting for a teammate"
 	// KindWaitingForTask is a gap a background task's notification closed: a build, a test suite, or a poll loop the
-	// agent had left running.
+	// agent had left running. Only where the task wasn't a live teammate's, which is the wait above.
 	KindWaitingForTask Kind = "waiting for a background task"
 	// KindWaitingUnknown is a gap with nothing on record saying what it was waiting for. The lane went quiet and later
 	// produced something, and no input, message, or notification sits between the two.

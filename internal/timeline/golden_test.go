@@ -15,9 +15,10 @@ import (
 var update = flag.Bool("update", false, "rewrite the golden files instead of comparing against them")
 
 // goldenSession is a hand-built session under testdata carrying one of everything the derivation has a rule for: a
-// spawn and the teammate it created, a wait ended by a teammate message, queued input, a compaction with the records
-// it replays under older stamps, a response packed into one record with parallel calls, a timed-out wait loop, a
-// six-hour stall, an honest 40-minute build, a lane with no metadata file, and a record type nothing decodes.
+// spawn and the teammate it created, a wait ended by a teammate message, a wait ended by the notification of a live
+// teammate's background task, one ended by a notification whose task no lane claims, queued input, a compaction with
+// the records it replays under older stamps, a response packed into one record with parallel calls, a timed-out wait
+// loop, a six-hour stall, an honest 40-minute build, a lane with no metadata file, and a record type nothing decodes.
 const goldenSession = "11111111-2222-3333-4444-555555555555"
 
 // TestGoldenTimeline holds the whole derivation to a file, so changing a rule shows up as a reviewable diff rather

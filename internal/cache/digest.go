@@ -21,7 +21,7 @@ import (
 //
 // TestTheDigestVersionMovesWithTheDerivation ties it to the golden CSV: change what the derivation outputs without
 // bumping this, and that test fails with the number to write here.
-const Version = 1
+const Version = 2
 
 // Digest is tier one: one session, summed, with no lane dimension. Every corpus query reads only these.
 type Digest struct {

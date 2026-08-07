@@ -216,8 +216,12 @@ Harness wraps relayed input in a tag of its own: structure rather than prose, so
 
 - `<teammate-message teammate_id="m1-engine" color="green">…</teammate-message>`: message from another agent. Subagent
   gets it as whole prompt; lead gets one line of preamble first, `Another Claude session sent a message:`.
-- `<task-notification><task-id>…</task-id>…</task-notification>`: background task reporting in. Arrives as
-  `queue-operation` content, not as a prompt.
+- `<task-notification><task-id>…</task-id><tool-use-id>…</tool-use-id><output-file>…</output-file><status>…</status><summary>…</summary></task-notification>`:
+  background task reporting in. Arrives as `queue-operation` content, and about a third of the time as a prompt (2,044
+  against 6,288 queued, verified 2026-08-06). `tool-use-id` is the `tool_use` id of the call that started the task, so
+  it links a notification to the lane that owns it, whichever lane the notification landed in. 9,884 of the corpus's
+  12,076 notifications carry one; 1,726 of the rest are `Monitor` events and 279 carry `output-file` straight after
+  `task-id` (verified 2026-08-07).
 
 `isMeta: true` marks a harness-injected user record rather than something a person typed: `<local-command-caveat>`
 preamble, or a `<system-reminder>` block. Three of 388 user records in reference session. Timeline code should not count

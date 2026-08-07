@@ -23,7 +23,7 @@ const (
 	alphaID  = "11111111-1111-1111-1111-111111111111"
 	goldenID = "11111111-2222-3333-4444-555555555555"
 	// goldenRows and goldenLanes are what the derivation's golden CSV holds for the fixture session.
-	goldenRows  = 37
+	goldenRows  = 38
 	goldenLanes = 3
 )
 

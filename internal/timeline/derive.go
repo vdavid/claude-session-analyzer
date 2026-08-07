@@ -12,6 +12,10 @@ import (
 func Derive(s *session.Session, opts Options) *Timeline {
 	opts = opts.withDefaults()
 	tl := &Timeline{SessionID: s.ID}
+	// Whose task was it: the map is over every lane's calls, so it has to be built before any lane is walked, and the
+	// waits it settles have to wait for the spans, so they're collected here and settled once the walk is done.
+	owners := toolUseOwners(s)
+	taskWaits := map[int]string{}
 
 	for _, lane := range s.Lanes {
 		first, last, ok := laneSpan(lane)
@@ -19,9 +23,13 @@ func Derive(s *session.Session, opts Options) *Timeline {
 			continue // a lane whose records carry no timestamps has nothing to place in time
 		}
 
-		d := &laneDeriver{lane: lane, opts: opts, cursor: first, end: last, open: map[string]*call{}}
+		d := &laneDeriver{lane: lane, opts: opts, cursor: first, end: last, open: map[string]*call{},
+			taskWaits: map[int]string{}}
 		rows := d.run()
 		labelThinking(rows)
+		for i, task := range d.taskWaits {
+			taskWaits[len(tl.Rows)+i] = task
+		}
 
 		tl.Lanes = append(tl.Lanes, LaneSpan{
 			ID:         lane.ID,
@@ -44,8 +52,12 @@ func Derive(s *session.Session, opts Options) *Timeline {
 		}
 	}
 
+	// attributeTaskWaits comes first, so nameWaits annotates the kind a row ends up with rather than the one it started
+	// with. Both run before the sort, which is what keeps the row indices the walk collected valid.
+	//
 	// nameWaits sweeps the lead's rows in time order, which they're in because a lane's cursor only moves forward and
 	// the lead's lane goes in first. The sort after it is stable, so rows that start together keep their lane order.
+	attributeTaskWaits(tl, owners, taskWaits)
 	nameWaits(tl, opts)
 	sort.SliceStable(tl.Rows, func(i, j int) bool { return tl.Rows[i].From.Before(tl.Rows[j].From) })
 	return tl
@@ -109,6 +121,11 @@ type laneDeriver struct {
 	// order it was issued. Both empty out together.
 	open  map[string]*call
 	batch []*call
+
+	// taskWaits maps the index of a wait a background task's notification closed to that task's tool-use id, for the
+	// pass that decides whose task it was. It's kept here rather than on the row because nothing downstream should
+	// learn to read a tool-use id off a wait.
+	taskWaits map[int]string
 }
 
 func (d *laneDeriver) run() []Row {
@@ -141,8 +158,7 @@ func (d *laneDeriver) run() []Row {
 
 		case rec.Type == transcript.TypeUser && isPrompt(rec):
 			d.flush(ts)
-			kind, info := waitedFor(rec)
-			d.emitWait(ts, kind, info, rec.Line)
+			d.emitWaitFor(rec, ts)
 			d.state = laneWorking
 
 		case rec.Type == transcript.TypeQueueOperation && isEnqueue(rec) && len(d.batch) == 0:
@@ -154,8 +170,7 @@ func (d *laneDeriver) run() []Row {
 			// and with the turn ending as the only signal all of it counted as thinking. Input arriving while the
 			// agent is genuinely composing clips a few seconds off the front of that row instead, which is a bounded
 			// error where the other one has no bound.
-			kind, info := waitedFor(rec)
-			d.emitWait(ts, kind, info, rec.Line)
+			d.emitWaitFor(rec, ts)
 			d.state = lanePending
 
 		case rec.Type == transcript.TypeSystem && rec.System != nil && isTurnEnd(rec.System.Subtype):
@@ -322,11 +337,20 @@ func (d *laneDeriver) goIdle(reason string) {
 	d.state, d.idleReason = laneIdle, reason
 }
 
-// emitWait closes an idle gap, in the kind that says what the lane was idle on. A zero-length wait is dropped: the
-// lane's very first record is a prompt, and a wait of no time isn't worth a row.
-func (d *laneDeriver) emitWait(ts time.Time, kind Kind, info string, line int) {
+// emitWaitFor closes an idle gap with what the record that ended it says, and remembers the tool-use id of a background
+// task's notification, which is what says whose task the lane was woken by. See attributeTaskWaits.
+func (d *laneDeriver) emitWaitFor(rec *transcript.Record, ts time.Time) {
+	kind, info, task := waitedFor(rec)
+	if d.emitWait(ts, kind, info, rec.Line) && task != "" {
+		d.taskWaits[len(d.rows)-1] = task
+	}
+}
+
+// emitWait closes an idle gap, in the kind that says what the lane was idle on, and says whether it emitted a row. A
+// zero-length wait is dropped: the lane's very first record is a prompt, and a wait of no time isn't worth a row.
+func (d *laneDeriver) emitWait(ts time.Time, kind Kind, info string, line int) bool {
 	if !ts.After(d.cursor) {
-		return
+		return false
 	}
 	d.rows = append(d.rows, Row{
 		From:   d.cursor,
@@ -338,6 +362,7 @@ func (d *laneDeriver) emitWait(ts time.Time, kind Kind, info string, line int) {
 		Line:   line,
 	})
 	d.cursor = ts
+	return true
 }
 
 // closeTail covers the stretch after the lane's last row: bookkeeping records at the end of a transcript, or a lane

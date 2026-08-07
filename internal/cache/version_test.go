@@ -13,7 +13,7 @@ const goldenPath = "../timeline/testdata/golden/timeline.csv"
 
 // goldenFingerprint is what that file hashed to when Version was last set. The two move together, and this test is the
 // thing that makes them.
-const goldenFingerprint = "f18cd63411b3f2184d78f9e49186678e30b9d31493150aa9d24e90c255db0c0e"
+const goldenFingerprint = "c12fd8fb405e65aa2f4cf15aeebfd7ee6963f37ea861dad02dd374eb77bfce14"
 
 // TestTheDigestVersionMovesWithTheDerivation is the guard on the one way this cache can be invisibly wrong.
 //

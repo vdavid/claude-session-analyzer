@@ -18,6 +18,17 @@ func relayedTeammateMessage(from, body string) string {
 	return "Another Claude session sent a message:\n" + teammateMessage(from, body)
 }
 
+// taskNotification is how a background task reports in: the harness's own envelope, carrying the task's id and the
+// tool-use id of the call that started it. 9,884 of the corpus's 12,076 notifications carry the tool-use id (verified
+// 2026-08-07); the ones that don't are covered by the case below that leaves the id out.
+func taskNotification(taskID, toolUseID string) string {
+	out := "<task-notification>\n<task-id>" + taskID + "</task-id>\n"
+	if toolUseID != "" {
+		out += "<tool-use-id>" + toolUseID + "</tool-use-id>\n"
+	}
+	return out + "<status>completed</status>\n<summary>Background command finished</summary>\n</task-notification>"
+}
+
 // TestWaitNamesWhatEndedIt covers the column that makes the timeline worth reading: a lead's idle stretch says who it
 // was idle on, in the kind as well as in the info.
 func TestWaitNamesWhatEndedIt(t *testing.T) {
@@ -57,6 +68,83 @@ func TestWaitNamesWhatEndedIt(t *testing.T) {
 			if got := wait.Duration(); got != 3595*time.Second {
 				t.Errorf("the wait lasted %s, want the whole stretch from the last block to the prompt", got)
 			}
+		})
+	}
+}
+
+// TestTaskWaitAsksWhoStartedTheTask covers the correction that keeps a notification from claiming a wait it didn't
+// earn. A notification says a task finished, not that the lane sat idle for it: on session 532ac591 the lead sat idle
+// 25m30s and was woken by a 0.14 s poll loop the subagent `m1-honesty` had left in the background, while that subagent
+// was alive and working the whole time. Read as a background task's wait, that says the app took 25 minutes to launch.
+//
+// So the task's owner decides. Another lane's task, that lane still running: the wait was on the teammate. Anything
+// else, including a task the lane started itself and a task whose owner had already finished, stays a background task's.
+func TestTaskWaitAsksWhoStartedTheTask(t *testing.T) {
+	cases := []struct {
+		name      string
+		toolUseID string
+		kind      Kind
+		want      string
+	}{
+		{"a task the lane started itself", "t1", KindWaitingForTask, "waiting for a background task"},
+		{"a live teammate's task", "w1", KindWaitingForTeammate, "waiting for teammate worker, via its background task"},
+		// A teammate that starts a long build, reports back, and exits leaves the lead genuinely waiting on the build.
+		{"a finished teammate's task", "e1", KindWaitingForTask, "waiting for a background task"},
+		{"a task no lane claims", "toolu_nobody", KindWaitingForTask, "waiting for a background task"},
+		{"a notification carrying no tool-use id", "", KindWaitingForTask, "waiting for a background task"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			lead := newLane("lead", true).
+				add(0, promptRec("bring the app up and build it")).
+				add(5, assistantRec(toolUseBlock("t1", "Bash", "command", "cargo build --release"))).
+				add(10, toolResultRec("t1", "moved to the background")).
+				add(12, assistantRec(textBlock("left the build running"))).
+				add(13, systemRec("turn_duration")).
+				add(3600, queueRec("enqueue", taskNotification("b19akwfoq", c.toolUseID))).
+				add(3605, assistantRec(textBlock("it finished"))).
+				done()
+			// Alive across the whole gap, and working: its own background task woke the lead.
+			worker := newLane("worker", false).
+				add(20, promptRec("your task")).
+				add(30, assistantRec(toolUseBlock("w1", "Bash",
+					"command", `until grep -q "Ready in" dev.log; do sleep 3; done`))).
+				add(40, toolResultRec("w1", "moved to the background")).
+				add(5000, assistantRec(textBlock("the app is up"))).
+				done()
+			// Gone long before the gap ended, so its task is the only thing the lead could have been waiting for.
+			early := newLane("early", false).
+				add(20, promptRec("your task")).
+				add(30, assistantRec(toolUseBlock("e1", "Bash", "command", "cargo test --release"))).
+				add(40, toolResultRec("e1", "moved to the background")).
+				add(100, assistantRec(textBlock("tests are running"))).
+				done()
+
+			rows := Derive(sessionOf(lead, worker, early), Options{}).Rows
+			wait := rowOfKindIn(t, rows, c.kind, "lead")
+
+			if !strings.HasPrefix(wait.Info, c.want) {
+				t.Errorf("the wait says %q, want it to start with %q", wait.Info, c.want)
+			}
+			// nameWaits still gets its say, and lands after the reclassification rather than on a stale kind.
+			if !strings.Contains(wait.Info, "teammates alive: early, worker") {
+				t.Errorf("the wait says %q, want it to still list who was alive", wait.Info)
+			}
+			if got := wait.Duration(); got != 3588*time.Second {
+				t.Errorf("the wait lasted %s, want the stretch from the last block to the notification", got)
+			}
+			if !wait.Kind.IsWaiting() || !wait.Kind.IsGap() {
+				t.Errorf("%s has to count as a wait and as a gap, or every total downstream drifts", wait.Kind)
+			}
+
+			var lane []Row
+			for _, r := range rows {
+				if r.LaneID == "lead" {
+					lane = append(lane, r)
+				}
+			}
+			checkTiling(t, lane, at(0), at(3605))
 		})
 	}
 }

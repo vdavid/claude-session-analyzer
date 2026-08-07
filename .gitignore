@@ -13,6 +13,9 @@ dist/
 .env.local
 .env.*.local
 
+# Worktrees live here, one per branch, and they're never part of the repo.
+.claude/worktrees/
+
 # Editors and OS
 .idea/
 .vscode/

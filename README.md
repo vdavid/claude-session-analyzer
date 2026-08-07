@@ -118,7 +118,10 @@ The 11 activities:
   including anything the tool itself waited on.
 - **waiting for a person**, **waiting for a teammate**, **waiting for a background task**, and **waiting, reason
   unknown**: the lane produced nothing, named by what ended the gap. Waiting is four values rather than one because "71
-  hours of waiting" answers nothing, while knowing that 41 of those hours were on a person does.
+  hours of waiting" answers nothing, while knowing that 41 of those hours were on a person does. A gap a background
+  task's notification ended counts as waiting for the teammate that started the task, when that teammate was still
+  running: the lead sitting idle for 25 minutes was blocked on the agent, not on the tenth-of-a-second poll loop that
+  woke it.
 - **API error**: the API refused the request. A rate limit, an expired login, an outage.
 - **stalled**: a result that arrived far too late for what the call was doing, so the agent was suspended rather than
   working.

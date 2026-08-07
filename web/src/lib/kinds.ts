@@ -77,13 +77,14 @@ const STYLES: Record<string, KindStyle> = {
         kind: 'waiting for a teammate',
         cssVar: '--csa-kind-wait-teammate',
         family: 'wait',
-        description: "Another agent's message closed the gap.",
+        description:
+            "Another agent's message closed the gap, or the notification of a background task that agent had left running while it was still alive.",
     },
     'waiting for a background task': {
         kind: 'waiting for a background task',
         cssVar: '--csa-kind-wait-background',
         family: 'wait',
-        description: "A background task's notification closed the gap.",
+        description: "A background task's notification closed the gap, and the task wasn't a live teammate's.",
     },
     'waiting, reason unknown': {
         kind: 'waiting, reason unknown',

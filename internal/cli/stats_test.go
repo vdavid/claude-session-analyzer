@@ -7,7 +7,7 @@ import (
 )
 
 // goldenRows is what the derivation's golden CSV holds for the fixture session.
-const goldenRows = 37
+const goldenRows = 38
 
 // isolate points the digest cache at a temporary directory, so a test can't read or write the cache on the machine
 // running it. `cache.Open` honours XDG_CACHE_HOME, which is the whole reason it does.

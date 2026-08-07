@@ -16,6 +16,12 @@ Where judgement lives, and where being wrong is invisible in output. Every rule 
   verdict it got; its `tool call` sibling is the agent composing the call, and counting both reports every call twice.
 - **Every class a command can be read as has to be in `precedence`** (`tool.go`). One that isn't can never outrank the
   `ClassShell` a command starts out as, so it gets mapped and then never returned. `ClassWeb` sat outside it once.
+- **A wait ended by a task notification asks whose task it was.** A live other lane's task makes it
+  `waiting for a teammate`; the lane's own, a finished lane's, or an id no lane claims stays
+  `waiting for a background task`. `attributeTaskWaits` (`wait.go`) runs as a post-pass in `Derive`, after the lane
+  spans exist and before `nameWaits`, and before the sort, which is what keeps the row indices the walk collected valid.
+  The tool-use id travels in a `map[int]string` from row index, never on `Row`: nothing downstream should read a
+  tool-use id off a wait.
 - **A rule is test-first here.** Write failing case, watch it fail for the right reason, then implement.
 - **A threshold carries its distribution next to the constant** (`options.go`, `stall.go`). A number with no measurement
   behind it is one the next person can't argue with.

@@ -30,8 +30,10 @@ no negative durations (verified 2026-08-06, `TestRealTimelineSweep`).
   including whatever the tool itself waited on.
 - **waiting for a person**: lane produced nothing until a person typed, queued a prompt, or answered a question the
   agent asked.
-- **waiting for a teammate**: another agent's message closed the gap.
-- **waiting for a background task**: a background task's notification closed the gap.
+- **waiting for a teammate**: another agent's message closed the gap, or the notification of a background task that
+  agent had left running while it was still alive.
+- **waiting for a background task**: a background task's notification closed the gap, and the task wasn't a live
+  teammate's.
 - **waiting, reason unknown**: lane went quiet, later produced something, no input, message, or notification between.
 - **API error**: API didn't answer the request. Span is harness retrying, time the session lost through no fault of the
   agent.
@@ -190,9 +192,8 @@ Two things a leaf has to see through, both found by reading reference session's 
 ### A wait is attributed by the record that ended it
 
 The record that arrived is the signal: a teammate's message (read from the harness's envelope, which carries sender's
-id), a background task's notification, or a person's prompt. So a notification landing while four teammates are alive is
-a background task's wait, not theirs, and a wait nothing arrived to end is `waiting, reason unknown` rather than a
-guess.
+id), a background task's notification, or a person's prompt. A wait nothing arrived to end is `waiting, reason unknown`
+rather than a guess.
 
 Leaves no ambiguity to resolve: across the corpus's 12,437 envelope-carrying records, not one carries both envelopes
 (verified 2026-08-06). A notification arrives as a plain prompt about a third of the time (2,044 against 6,288 queued),
@@ -205,6 +206,35 @@ side of that trade.
 Lead waits also list teammates alive at the time, the difference between "blocked on four agents" and "blocked on
 nobody". A sweep over lanes sorted by start with a heap of the ones still running, because one session in corpus has 977
 workflow lanes and a scan per row would not do.
+
+A notification is the one signal that gets a second question asked, because it says a task finished, not that the lane
+was waiting for the task. Session `532ac591`, measured 2026-08-07: 14 of lead's waits read as waiting on the dev app,
+5.97 h of lead idle against 3.19 h of task, six of the tasks under a second. Worst one, lead idle 25m30s, woken by
+
+```sh
+until grep -q "Running DevCommand\|app started\|Ready in" .../dev.log; do sleep 3; done; echo "app launched"
+```
+
+which subagent `m1-honesty` started at 08:04:47.767 and which finished at 08:04:47.908. **0.14 s.** Lead was waiting for
+`m1-honesty`, alive and working throughout; reading that as a background task's wait claims the app took 25 minutes to
+launch, and reads as true.
+
+So a notification-closed gap is `waiting for a teammate` when both of these hold, and `waiting for a background task`
+otherwise:
+
+1. notification's `<tool-use-id>` belongs to a lane other than the waiting one, and
+2. that lane was still alive when the gap ended (`LaneSpan.First <= row.Until <= LaneSpan.Last`).
+
+Condition 2 is not droppable: a subagent that starts a 40-minute build, reports back, and finishes leaves the lead
+genuinely waiting on the build, which is a real background task's wait. Only the still-running case is the lead blocked
+on the teammate. Info reads `waiting for teammate <name>, via its background task`: same phrasing as every other
+teammate wait, plus how it was established.
+
+Ownership comes from a pre-pass mapping every `tool_use` id in every lane to its lane, every lane rather than the one
+being walked, because the owner is nearly always a different one. An id no lane claims keeps
+`waiting for a background task`, which covers an owner's transcript compacted away, and a notification carrying no
+`<tool-use-id>` at all: 9,884 of the corpus's 12,076 notifications carry one, and 1,726 of the rest are `Monitor` events
+(verified 2026-08-07). Unknown means unchanged, never a guess.
 
 ## What this doesn't do
 

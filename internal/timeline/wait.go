@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vdavid/claude-session-analyzer/internal/session"
 	"github.com/vdavid/claude-session-analyzer/internal/transcript"
 )
 
@@ -15,17 +16,23 @@ import (
 const (
 	teammateEnvelope = "<teammate-message "
 	taskEnvelope     = "<task-notification>"
+	// taskCallElement is the notification's link back to the call that started the task, which is what says whose task
+	// it was. 9,884 of the corpus's 12,076 notifications carry one (verified 2026-08-07).
+	taskCallElement = "tool-use-id"
 	// envelopeSearchLimit is how far into a message the envelope is looked for. A lead's copy comes after one line of
 	// preamble; anything further in is quoted text rather than the message's own wrapper.
 	envelopeSearchLimit = 200
 )
 
-// waitedFor says what a lane was waiting for, read off whatever ended the wait: the record that arrived is the signal,
-// so a notification landing while teammates are alive is a background task's wait and not theirs.
+// waitedFor says what a lane was waiting for, read off whatever ended the wait: the record that arrived is the signal.
+//
+// The third result is the tool-use id of the task a notification reported on, empty for every other kind of wait. It's
+// handed back rather than kept on the row because whose task it was can't be answered yet: it takes every lane's calls,
+// and every lane's span. attributeTaskWaits settles it once the walk is done.
 //
 // The two envelopes never share a message. Across the corpus's 12,437 envelope-carrying records, not one carries both
 // (verified 2026-08-06), so the order these are checked in doesn't decide anything.
-func waitedFor(rec *transcript.Record) (Kind, string) {
+func waitedFor(rec *transcript.Record) (Kind, string, string) {
 	text := rec.Prompt
 	if text == "" && rec.Queue != nil {
 		text = rec.Queue.Content
@@ -40,15 +47,85 @@ func waitedFor(rec *transcript.Record) (Kind, string) {
 	}
 
 	if from, ok := teammateSender(text); ok {
-		return KindWaitingForTeammate, "waiting for teammate " + from
+		return KindWaitingForTeammate, "waiting for teammate " + from, ""
 	}
-	if strings.Contains(head(text), taskEnvelope) {
-		return KindWaitingForTask, "waiting for a background task"
+	if start := strings.Index(head(text), taskEnvelope); start >= 0 {
+		return KindWaitingForTask, "waiting for a background task", element(text[start:], taskCallElement)
 	}
 	if rec.Type == transcript.TypeQueueOperation {
-		return KindWaitingForPerson, "waiting for the next prompt, which arrived queued"
+		return KindWaitingForPerson, "waiting for the next prompt, which arrived queued", ""
 	}
-	return KindWaitingForPerson, "waiting for the next prompt"
+	return KindWaitingForPerson, "waiting for the next prompt", ""
+}
+
+// attributeTaskWaits hands the waits a teammate's still-running task closed to the teammate.
+//
+// A notification says a task finished, not that the lane was waiting for the task. On session 532ac591 the lead sat
+// idle 25m30s and was woken by a 0.14 s poll loop that the subagent `m1-honesty` had left in the background: the lead
+// was waiting for `m1-honesty`, which was alive and working the whole time, and calling that a background task's wait
+// claims the app took 25 minutes to launch.
+//
+// Two things have to hold, and dropping either gets a real case wrong. The task belongs to another lane, because a lane
+// waiting on its own task is waiting on the task. And that lane was still running when the gap ended, because a teammate
+// that starts a 40-minute build, reports back, and exits leaves the lead genuinely waiting on the build.
+//
+// An id no lane claims keeps what it had, which is what a notification carrying none and one whose owner's transcript
+// was compacted away both look like. Unknown means unchanged, never a guess.
+func attributeTaskWaits(tl *Timeline, owners map[string]string, waits map[int]string) {
+	if len(waits) == 0 {
+		return
+	}
+	spans := make(map[string]LaneSpan, len(tl.Lanes))
+	for _, lane := range tl.Lanes {
+		spans[lane.ID] = lane
+	}
+
+	for i, task := range waits {
+		row := &tl.Rows[i]
+		owner, ok := owners[task]
+		if !ok || owner == row.LaneID {
+			continue
+		}
+		span, ok := spans[owner]
+		if !ok || span.First.After(row.Until) || row.Until.After(span.Last) {
+			continue
+		}
+		row.Kind = KindWaitingForTeammate
+		// Phrased like every other teammate wait, with how it was established on the end, so a reader can tell this one
+		// came from a task rather than from a message.
+		row.Info = "waiting for teammate " + span.Name + ", via its background task"
+	}
+}
+
+// toolUseOwners maps every tool-use id in the session to the lane that issued it. It covers every lane rather than the
+// one being walked, because the task that woke a lane was nearly always started by a different one.
+func toolUseOwners(s *session.Session) map[string]string {
+	owners := map[string]string{}
+	for _, lane := range s.Lanes {
+		for _, rec := range lane.Records {
+			for _, b := range rec.Blocks {
+				if b.Type == transcript.BlockToolUse && b.ToolUseID != "" {
+					owners[b.ToolUseID] = lane.ID
+				}
+			}
+		}
+	}
+	return owners
+}
+
+// element reads one `<name>value</name>` out of a tag's body, empty when the element isn't there.
+func element(tag, name string) string {
+	openTag, closeTag := "<"+name+">", "</"+name+">"
+	start := strings.Index(tag, openTag)
+	if start < 0 {
+		return ""
+	}
+	rest := tag[start+len(openTag):]
+	end := strings.Index(rest, closeTag)
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
 }
 
 // teammateSender reads the sender out of a teammate message's envelope.
