@@ -16,16 +16,87 @@ detection is a heuristic, thinking row's subject is borrowed from what came next
 
 1. **The trace.** Stepped area strip under header, how many agents were producing at once across the span, peak called
    out. Shape of the session in one line: where parallel waves were, how much of the span had nobody working.
-2. **The stat rail.** Elapsed, lane time, lanes, rows, each with its caveat printed under it rather than hidden in a
-   tooltip. A number whose caveat lives elsewhere gets read wrong.
-3. **Where lane time went.** Band bar (working / waiting / lost / compacting), then the donut with its legend as a table
-   beside it. Hovering a legend row lights its slice.
+2. **The stat rail.** Elapsed, lane time, net agent time, lanes, rows, each with its caveat printed under it rather than
+   hidden in a tooltip. A number whose caveat lives elsewhere gets read wrong. `StatRail` picks its column count off the
+   stat count, so five tiles don't leave one alone on a second row.
+3. **Where lane time went.** Band bar (working / waiting / lost / compacting), then the ladder (lane time, net agent
+   time, active time as three nested bars), then the donut with its legend as a table beside it. Hovering a legend row
+   lights its slice.
 4. **Who was alive, and when.** Swimlane, chip per workflow above it.
-5. **What the agents reached for.** Tool donut, strip of category shares over it, legend as a table beside it. Picking a
-   slice or legend row filters the sheet below to that tool's rows and scrolls to it.
+5. **Tools.** Three blocks in one card, because "how often was this reached for" and "where did its time go" are two
+   questions: category strip plus the call donut, the clock bars beside it, and the full breakdown table under both.
+   Picking a tool anywhere in the three filters the sheet below to its rows and scrolls to it.
 6. **Every row.** The virtualized sheet.
 
 ## Decisions
+
+### The ladder is drawn, not just printed
+
+Lane time, net agent time, active time (`docs/api.md` § The ladder) are three durations over the same rows, each the
+rung above minus something. Section 3 draws them as three nested bars with the subtraction spelled out beside each:
+"minus 73h54m waiting on a person or on a teammate", "minus 6h50m of stalls, API errors, and waits on a background
+task". The subtraction is the content. Printing the three as three tiles would put "119h05m" and "45h11m" side by side
+with nothing saying why they differ, which is exactly how one gets quoted as the other.
+
+Elapsed sits in the rail and in a line under the ladder saying it **isn't** a rung. It's beside the ladder, not on it.
+
+Ladder bars are neutral (`--csa-border-strong`), not a kind colour. They're totals over every kind, so a saturated bar
+would read as a kind that's in no legend.
+
+### Three clocks, three treatments, not three hues
+
+A tool group's time arrives on three clocks and all three carry the group's name: `composingSeconds` (agent writing the
+call), `seconds` (tool running), `stalledSeconds` (call back far too late to have been running). The clock bars
+(`ToolClockBars.svelte`) draw one horizontal stacked bar per group, ranked by all three added.
+
+- **Why bars and not three pies.** The split **inverts** per tool, and the inversion is the finding: `Edit` is 1,032
+  calls at 2h14m composing against 1m50s running, because the model streams the whole diff as the call's arguments,
+  while `Bash (checker)` is 344 calls at 24m composing against 7h51m running. Pie-to-pie is the weakest visual
+  comparison there is, and the question is inherently comparative. One ranked bar chart answers it in a glance.
+- **Hue stays the tool's category**, the same vocabulary the donut beside it uses, so an arc and a bar are the same
+  tool. The clock rides on **treatment**, not on a third palette: composing is the hue pushed 38% toward `--csa-ink`,
+  running is the hue itself, stalled is the hue plus a dot texture in `--csa-decal-ink`.
+- **Toward ink rather than toward the surface.** A wash pale enough to read as "not the tool" measures under 3:1 against
+  paper. Ink is dark in light mode and light in dark mode, so one `color-mix` declaration steps the right way in both,
+  and both steps stay legible on their surface.
+- **Dots for stalled** because dots already mean "this isn't work" on this page: the kind donut marks its two lost-time
+  slices the same way. Stalled is also always last in the stack and always direct-labelled, so it can't hide.
+- **Position is the third channel**, left to right in the order the time happened: the agent composes, then the tool
+  runs, and a stall stands in for running rather than following it.
+- **The bar's length is the three added, and no number ever is.** Ranking on that sum is what keeps the finding on
+  screen; sorted by running time, `Edit` sinks to the bottom and nobody learns those 1,032 calls cost two hours of an
+  agent. The label beside each bar is **one clock, named** ("7h51m running", "6h15m stalled"), and the legend says in
+  words that adding the three reports a tool as costing what the agent and a suspension cost. The table's three columns
+  are three columns for the same reason: no total column.
+- **Every row carries its own sentence for a screen reader**, all three clocks plus calls and lanes, because the bars
+  are where a sighted reader gets the comparison.
+- **The 2px separator is a flex gap, not a border.** A 2px border inside each segment swallows any segment narrower than
+  itself: `SendMessage`'s 1m49s of composing is about a pixel on a 10-hour axis and drew as nothing at all. A gap costs
+  a bar with three segments up to 4px of overstated length, which is a rounding error next to losing a value. Segments
+  under a pixel still vanish, and their label carries the number.
+- **Drawn in HTML, not on canvas**, the way `BandBar.svelte` is. 28 rows of divs cost nothing, the labels stay real text
+  and real buttons, and the colours come from the stylesheet in both themes with no palette read-back.
+
+Two steps of one hue is an **ordinal** ramp, so it validates as one rather than as a categorical pair. All 14 (seven
+categories × two modes) pass every ordinal check, verified 2026-08-08: monotone lightness, adjacent ΔL over 0.06, single
+hue (spread 0–5°), and a light end clearing its surface. Weakest light end is `checks` in light at 3.24:1, which is the
+category's own value unchanged. To re-run one, load the `dataviz` skill and from its base directory:
+
+```sh
+# light: composing step, then the category colour, against `--csa-surface`
+node scripts/validate_palette.js "#27553e,#2f7d4f" --ordinal --mode light --surface "#ffffff"
+# dark: lighter is the composing step there, so the pair swaps to stay light→dark
+node scripts/validate_palette.js "#3fa76a,#85c19d" --ordinal --mode dark --surface "#161b23"
+```
+
+The composing steps aren't stored anywhere: `color-mix` derives them from the category colour and `--csa-ink`, so the
+numbers above come from reading the rendered fill back out of the page. Read them from `.clock-fill-composing` in the
+browser rather than recomputing them by hand.
+
+**Stalled is the one thing the validator can't express.** It's the same step as running, told apart by texture rather
+than by lightness, which fails an ordinal ΔL check by construction. That's deliberate: hue is spent on the category and
+another lightness step would either leave the band or read as a fourth category. Its channels are the dot texture, last
+position, and a label that's always there.
 
 ### The API is reached through a Vite proxy, not by origin
 
@@ -50,7 +121,9 @@ and magenta, compaction slate. Makes "how much of this was waiting" answerable f
 anyone asks.
 
 Waits also carry a diagonal hatch in the pie and the two trouble kinds carry dots: second channel for anyone who can't
-lean on hue, and a reminder those slices aren't work.
+lean on hue, and a reminder those slices aren't work. Texture ink is one token, `--csa-decal-ink`, light over a mid-tone
+hue and shadow over a bright one. `KindPie` reads it through `theme.palette.chrome.decalInk` for canvas and the clock
+bars read the property directly, so the two can't drift.
 
 Kind colours live in `web/src/app.css`, read back out by `theme.svelte.ts` for canvas, because ECharts needs literals.
 Light and dark are two blocks in one file, switched by `prefers-color-scheme`: no class toggling, no stored preference,
@@ -140,9 +213,11 @@ the table sees them, because a dropdown doesn't need a filter row model. Table i
 than mutated in place, which costs one pass over the rows and buys a component with no lifecycle subtleties in it.
 Search box is debounced by 180 ms so a keystroke doesn't rebuild 22,000 rows.
 
-Tool dropdown is bound to the page rather than owned by the sheet, so clicking a slice two sections up and picking one
-from the dropdown are the same act. Picking a group shows both of its rows per call, composing and running, because
-they're what the derivation produced and the sheet's job is to show the rows.
+Tool dropdown is bound to the page rather than owned by the sheet, so clicking a slice, clicking a clock bar, clicking a
+table row, and picking from the dropdown are all the same act. Picking a group shows both of its rows per call,
+composing and running, because they're what the derivation produced and the sheet's job is to show the rows. It's also
+how a stall gets traced: filter to `Bash (file write)` on the reference session, sort by length, and the 6h15m row on
+top is `stalled` in one lane, with 68 calls averaging seconds under it.
 
 ## Dependency notes
 

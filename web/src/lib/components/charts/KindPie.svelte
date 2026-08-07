@@ -24,8 +24,12 @@
 
     const palette = $derived(theme.palette)
 
-    /** Ink over a saturated fill in light mode, and shadow over a bright one in dark. */
-    const decalInk = $derived(palette.dark ? 'rgba(0, 0, 0, 0.30)' : 'rgba(255, 255, 255, 0.42)')
+    /**
+     * Ink over a saturated fill in light mode, shadow over a bright one in dark. It's a token rather
+     * than a literal here because the tool clock bars draw their own texture in the same ink, and two
+     * definitions of one colour drift.
+     */
+    const decalInk = $derived(palette.chrome.decalInk)
 
     const hatch = $derived({
         color: decalInk,

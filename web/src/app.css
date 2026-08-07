@@ -75,6 +75,11 @@
     --csa-band-wait: #c9611b;
     --csa-band-trouble: #c33f38;
 
+    /* The ink a texture is drawn in over a saturated fill: light over a mid-tone hue here, shadow over
+       a bright one in dark. It's a second channel for anyone who can't lean on hue, so it belongs to
+       neither colour vocabulary. The kind pie's hatch and dots read it through `theme.palette`. */
+    --csa-decal-ink: rgb(255 255 255 / 0.42);
+
     --csa-shadow-card: 0 1px 2px rgb(21 26 33 / 0.05), 0 1px 1px rgb(21 26 33 / 0.04);
 }
 
@@ -116,6 +121,8 @@
         --csa-band-work: #6fa8ec;
         --csa-band-wait: #e8843c;
         --csa-band-trouble: #ef7a70;
+
+        --csa-decal-ink: rgb(0 0 0 / 0.3);
 
         --csa-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
     }
@@ -188,6 +195,32 @@
         border: 1px solid var(--csa-border);
         border-radius: 0.625rem;
         box-shadow: var(--csa-shadow-card);
+    }
+
+    /* One tool call's time goes to three clocks, and all three arrive under the tool's name. The clock
+       bars draw them as three treatments of that tool's own category colour rather than as three more
+       hues: the page has exactly two colour vocabularies (`docs/frontend.md`) and a third would compete
+       with both. Hue says which tool, treatment says which clock, and position says when it happened.
+
+       The hue arrives as `--clock-hue`, set inline from `categoryVar`, so these classes work for any
+       category and for the ink swatches the legend draws. */
+    .clock-fill {
+        background-color: var(--clock-hue, var(--csa-ink-muted));
+    }
+
+    /* The agent writing the call: the same hue pushed toward ink. Toward ink rather than toward the
+       surface because a wash pale enough to read as "not the tool" measures under 3:1 against paper,
+       and because ink is dark in light mode and light in dark mode, so one declaration steps the right
+       way in both and both steps stay legible on their surface. */
+    .clock-fill-composing {
+        background-color: color-mix(in oklab, var(--clock-hue, var(--csa-ink-muted)) 62%, var(--csa-ink));
+    }
+
+    /* A suspension rather than a tool, so it wears dots: that's what the kind pie marks the two ways a
+       session loses time with, and it's the channel that survives being read without hue. */
+    .clock-fill-stalled {
+        background-image: radial-gradient(circle at 50% 50%, var(--csa-decal-ink) 1.15px, transparent 1.3px);
+        background-size: 4px 4px;
     }
 
     /* Sections rise into place once, staggered by `--rise-delay`, so the page assembles rather

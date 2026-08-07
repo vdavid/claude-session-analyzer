@@ -27,6 +27,8 @@ const CHROME = {
     work: '--csa-band-work',
     wait: '--csa-band-wait',
     trouble: '--csa-band-trouble',
+    /** What a texture is drawn in over a saturated fill. The CSS bars read the same property. */
+    decalInk: '--csa-decal-ink',
 } as const
 
 export interface Palette {

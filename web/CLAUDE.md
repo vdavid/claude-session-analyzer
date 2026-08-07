@@ -26,7 +26,18 @@ it consumes: `docs/api.md`. Read that before touching anything that reads a JSON
   name with no slot, and `toolBreakdown` ranks an unlisted category after every listed one. Right failure for a page:
   the groups still show up, uncoloured rather than missing.
 - **Never present a `byKind` share as a share of elapsed time.** It's lane time, which is larger. `docs/api.md` § The
-  two numbers that aren't the same.
+  ladder.
+- **A tool group's time is three numbers, and nothing here adds them into one.** `runningSeconds` (the API's `seconds`,
+  renamed here so it can't read as a cost), `composingSeconds`, `stalledSeconds`. `attributedSeconds` is their sum and
+  is named for what it is: every second filed under the group's name. It's a bar length and a sort key, never a printed
+  figure, because one number over all three reports a tool as costing what the agent and a suspension cost. Three table
+  columns, no total column, and every duration on screen says which clock it is.
+- **The three clocks wear treatments of the category hue, not hues of their own.** `clock-fill`, `clock-fill-composing`,
+  `clock-fill-stalled` in `app.css`, over a `--clock-hue` set inline from `categoryVar`. Two colour vocabularies is the
+  budget; the encoding decision and why is `docs/frontend.md` § Three clocks, three treatments, not three hues.
+- **Lane time, net agent time, and active time are a ladder, never three rivals.** `netSeconds` and `activeSeconds` come
+  off the API; `timeLadder` measures the subtractions. Show the subtraction wherever a rung shows, and never put elapsed
+  on the ladder.
 - Tailwind tokens are registered `@theme inline` over custom properties. An opacity modifier on one compiles to a
   `color-mix()` behind `@supports`, solid colour as fallback, which is why the sticky header is opaque rather than
   broken on a browser that can't mix.
@@ -40,7 +51,8 @@ it consumes: `docs/api.md`. Read that before touching anything that reads a JSON
   shapes), `format.ts` (durations, instants, bytes; `formatBytes` matches `humanBytes` in `internal/cli/format.go`),
   `kinds.ts` (the eleven kinds: legend order, colour variable, family, and the sentence keeping each honest),
   `categories.ts` (the tool-category palette: name to CSS variable, and the neutral an unknown name falls to),
-  `theme.svelte.ts` (stylesheet read back out for canvas, following `prefers-color-scheme`).
+  `theme.svelte.ts` (stylesheet read back out for canvas, following `prefers-color-scheme`; `chrome.decalInk` is the one
+  definition of the ink a texture is drawn in, shared with the CSS bars).
 - `src/lib/transform/`: the tested layer. API JSON into chart series. Nothing else is unit-tested. Must-knows:
   `web/src/lib/transform/CLAUDE.md`.
 - `src/lib/components/`: `charts/` (one component per chart, all over `charts/Chart.svelte`), plus the sheet, the

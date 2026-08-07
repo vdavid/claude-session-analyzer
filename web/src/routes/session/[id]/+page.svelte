@@ -15,6 +15,8 @@
     import KindLegend from '$lib/components/KindLegend.svelte'
     import Notice from '$lib/components/Notice.svelte'
     import StatRail from '$lib/components/StatRail.svelte'
+    import TimeLadder from '$lib/components/TimeLadder.svelte'
+    import ToolClockBars from '$lib/components/ToolClockBars.svelte'
     import ToolLegend from '$lib/components/ToolLegend.svelte'
     import ConcurrencyTrace from '$lib/components/charts/ConcurrencyTrace.svelte'
     import KindPie from '$lib/components/charts/KindPie.svelte'
@@ -32,9 +34,10 @@
     } from '$lib/format'
     import { theme } from '$lib/theme.svelte'
     import { concurrencyTrace } from '$lib/transform/concurrency'
+    import { timeLadder } from '$lib/transform/ladder'
     import { bandTotals, kindSlices } from '$lib/transform/pie'
     import { buildSwimlane } from '$lib/transform/swimlane'
-    import { toolBreakdown } from '$lib/transform/tools'
+    import { toolBreakdown, toolClockBars } from '$lib/transform/tools'
     import type { TimelineResponse } from '$lib/types'
 
     let aggregates = $state<TimelineResponse | null>(null)
@@ -116,7 +119,12 @@
     const kinds = $derived(slices.map((s) => s.kind))
     let highlight = $state<number | null>(null)
 
+    const ladder = $derived(
+        timeLadder(totals ?? { wallClockSeconds: 0, laneTimeSeconds: 0, netSeconds: 0, activeSeconds: 0 }),
+    )
+
     const tools = $derived(toolBreakdown(totals?.byTool ?? [], aggregates?.toolCategories ?? []))
+    const clocks = $derived(toolClockBars(tools.slices))
     /** What each category holds, as the API described it, for the strip's tooltips. */
     const descriptions = $derived(new Map((aggregates?.toolCategories ?? []).map((c) => [c.category, c.description])))
     let toolHighlight = $state<number | null>(null)
@@ -154,6 +162,12 @@
                       label: 'Lane time',
                       value: formatDuration(totals.laneTimeSeconds),
                       note: 'Every lane added up, so parallel work counts once each',
+                  },
+                  {
+                      label: 'Net agent time',
+                      value: formatDuration(totals.netSeconds),
+                      note: 'Lane time minus waiting on a person or a teammate',
+                      title: `Lane time minus the two waits whose clock belongs to somebody else. A wait on a teammate is already that teammate's own lane time, and a wait on a person was never agent time.`,
                   },
                   {
                       label: 'Lanes',
@@ -240,13 +254,27 @@
                 A breakdown of <strong class="font-medium text-ink">lane time</strong>, {formatDuration(
                     totals.laneTimeSeconds,
                 )}, not of the {formatDuration(totals.wallClockSeconds)} the session took. Lanes running side by side each
-                count their own time, which is why the two differ.
+                count their own time, which is why the two differ. Take the waiting out of it and
+                <strong class="font-medium text-ink">net agent time</strong>, {formatDuration(totals.netSeconds)}, is
+                what the session actually cost.
             </p>
 
             <div class="card mt-4 p-5">
                 <BandBar {bands} />
 
-                <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-8">
+                <div class="mt-6 border-t border-border-base pt-5">
+                    <h3 class="eyebrow">Lane time, net agent time, active time</h3>
+                    <p class="mt-1.5 mb-4 max-w-3xl text-xs leading-relaxed text-ink-faint">
+                        Three durations over the same rows, each one the rung above minus something named. They aren't
+                        rivals: pick the one that answers your question, and the subtraction is what stops one being
+                        read as another.
+                    </p>
+                    <TimeLadder {ladder} />
+                </div>
+
+                <div
+                    class="mt-6 grid gap-6 border-t border-border-base pt-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-8"
+                >
                     <div class="lg:sticky lg:top-20 lg:self-start">
                         <KindPie {slices} {highlight} height="300px" />
                     </div>
@@ -321,23 +349,36 @@
 
         {#if tools.slices.length}
             <section class="rise mt-10" style:--rise-delay="200ms" aria-labelledby="tools-heading">
-                <h2 id="tools-heading" class="text-xl font-semibold tracking-tight text-ink">
-                    What the agents reached for
-                </h2>
+                <h2 id="tools-heading" class="text-xl font-semibold tracking-tight text-ink">Tools</h2>
                 <p class="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-muted">
                     {formatCount(tools.calls)} tool
-                    {tools.calls === 1 ? 'call' : 'calls'} across every lane, counted as calls rather than as time: a checker
-                    run costs minutes and a lookup costs a second, so seconds would say what the machine was busy with rather
-                    than what the agents did.
+                    {tools.calls === 1 ? 'call' : 'calls'} across every lane.
                     {#if tools.busiest}
                         The busiest is <strong class="font-medium text-ink">{tools.busiest.group}</strong>, at
-                        {formatCount(tools.busiest.calls)} calls ({formatShare(tools.busiest.calls, tools.calls)}).
+                        {formatCount(tools.busiest.calls)}
+                        {tools.busiest.calls === 1 ? 'call' : 'calls'} ({formatShare(
+                            tools.busiest.calls,
+                            tools.calls,
+                        )}).
                     {/if}
-                    Pick one to filter the sheet below to its rows.
+                    Every call leaves two stretches of a lane's clock, and the page keeps them apart: the agent
+                    <strong class="font-medium text-ink">composing</strong> the call, and the tool
+                    <strong class="font-medium text-ink">running</strong> it. A third,
+                    <strong class="font-medium text-ink">stalled</strong>, turns up when a result came back far too late
+                    to have been running. So how often a tool was reached for and how much time went through it are two
+                    questions, and they get a chart each. Pick a tool anywhere here to filter the sheet below to its
+                    rows.
                 </p>
 
                 <div class="card mt-4 p-5">
-                    <ul class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                    <h3 class="eyebrow">Which tools, by call count</h3>
+                    <p class="mt-1.5 max-w-3xl text-xs leading-relaxed text-ink-faint">
+                        Counted as calls rather than as time: a checker run costs minutes and a lookup costs a second,
+                        so seconds here would say what the machine was busy with rather than what the agents reached
+                        for. Colour is the category, and a category is one contiguous arc.
+                    </p>
+
+                    <ul class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                         {#each tools.categories as category (category.category)}
                             {@const described = descriptions.get(category.category)}
                             <li class="flex items-center gap-1.5 text-xs" title={described}>
@@ -353,7 +394,7 @@
                         {/each}
                     </ul>
 
-                    <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:gap-8">
+                    <div class="mt-4 grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-8">
                         <div class="lg:sticky lg:top-20 lg:self-start">
                             <ToolPie
                                 slices={tools.slices}
@@ -362,22 +403,42 @@
                                 onSelect={showTool}
                             />
                         </div>
-                        <ToolLegend
-                            slices={tools.slices}
-                            calls={tools.calls}
-                            categories={tools.categories}
-                            selected={toolFilter}
-                            onHover={(index) => (toolHighlight = index)}
-                            onSelect={showTool}
-                        />
+
+                        <div>
+                            <h3 class="eyebrow">Where each tool's time went</h3>
+                            <p class="mt-1.5 mb-3 text-xs leading-relaxed text-ink-faint">
+                                The split inverts per tool, and that's the finding: the model streams a whole diff as an
+                                <code class="text-ink-muted">Edit</code>'s arguments, so the writing is the cost and the
+                                write itself is instant, while a checker is the other way round. Bars are ranked by the
+                                time that arrived under each tool's name.
+                            </p>
+                            <ToolClockBars
+                                chart={clocks}
+                                selected={toolFilter}
+                                onHover={(index) => (toolHighlight = index)}
+                                onSelect={showTool}
+                            />
+                        </div>
+                    </div>
+
+                    <div class="mt-6 border-t border-border-base pt-5">
+                        <h3 class="eyebrow">Every tool, with all three clocks</h3>
+                        <p class="mt-1.5 mb-3 max-w-3xl text-xs leading-relaxed text-ink-faint">
+                            Open a group to see the exact tools inside it: an MCP server's methods, or the programs a
+                            <code class="text-ink-muted">Bash</code> group ran. The lane count is who reached for it.
+                        </p>
+                        <div class="overflow-x-auto">
+                            <ToolLegend
+                                slices={tools.slices}
+                                calls={tools.calls}
+                                categories={tools.categories}
+                                selected={toolFilter}
+                                onHover={(index) => (toolHighlight = index)}
+                                onSelect={showTool}
+                            />
+                        </div>
                     </div>
                 </div>
-
-                <p class="mt-2 text-xs text-ink-faint">
-                    Tool time is the wall clock between a call and its result, so it counts whatever the tool waited on,
-                    a permission prompt included. Calls that ran in parallel each count their own, the same way lane
-                    time does.
-                </p>
             </section>
         {/if}
 

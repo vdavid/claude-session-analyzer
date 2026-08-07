@@ -4,7 +4,7 @@
  * Everything here is a share of **lane time**: every lane's rows added up, which is larger than the
  * session's elapsed time whenever lanes ran at once. The UI has to say so wherever these numbers
  * appear, because reading them as a breakdown of elapsed time is the one mistake the API is shaped
- * to prevent (`docs/api.md` § The two numbers that aren't the same).
+ * to prevent (`docs/api.md` § The ladder).
  */
 
 import { byLegendOrder, kindFamily, type KindFamily } from '../kinds'

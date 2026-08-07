@@ -42,10 +42,13 @@
                 const slice = slices[(p as { dataIndex: number }).dataIndex]
                 if (!slice) return ''
                 const lanes = `${formatCount(slice.lanes)} ${slice.lanes === 1 ? 'lane' : 'lanes'}`
+                // Every duration here names its clock. One printed as "tool time" is the one mistake
+                // this page is shaped to prevent: three clocks arrive under a group's name.
+                const stalled = slice.stalledSeconds > 0 ? `, ${formatDuration(slice.stalledSeconds)} stalled` : ''
                 return (
                     `<strong>${escapeHtml(slice.group)}</strong><br>` +
-                    `${formatCount(slice.calls)} ${slice.calls === 1 ? 'call' : 'calls'}, ${formatShare(slice.calls, calls)}<br>` +
-                    `${formatDuration(slice.seconds)} of tool time, from ${lanes}`
+                    `${formatCount(slice.calls)} ${slice.calls === 1 ? 'call' : 'calls'}, ${formatShare(slice.calls, calls)}, from ${lanes}<br>` +
+                    `${formatDuration(slice.composingSeconds)} composing, ${formatDuration(slice.runningSeconds)} running${stalled}`
                 )
             },
         },

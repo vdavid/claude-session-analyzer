@@ -149,14 +149,23 @@ Open a session and it derives the timeline on the spot, then shows:
 - **Elapsed time beside lane time.** Those are different numbers and the page never mixes them up: lane time adds every
   agent's clock together, so two agents working side by side for an hour is two hours of lane time and one hour of
   elapsed time.
+- **Lane time, net agent time, and active time as a ladder**, with the subtraction between the rungs written out. Net is
+  lane time minus the waiting whose clock belongs to somebody else, so it's what the session actually cost in agent
+  time; active takes the stalls and the API errors out on top of that. They answer different questions, and seeing what
+  each one dropped is what stops you quoting one as another.
 - **A donut of lane time by activity**, with a legend that spells out what each slice does and doesn't include.
 - **A swimlane of who was alive when.** A thick bar means the agent was producing something; a thin one means it wasn't,
   coloured by what it was waiting on. A session with a thousand agents collapses its workflows into a row each, opening
   on click.
-- **What the agents reached for.** A donut of every tool call in the session, with the numbers beside it: how often each
-  tool was used, how long it took, and how many agents used it. `Bash` is broken up by what the command was doing and an
-  MCP server's methods are gathered under the server, so "who used codegraph" is one row rather than four names you have
-  to know to look for. Pick a slice and the sheet below filters to those calls.
+- **Tools, as two questions rather than one.** A donut of every tool call in the session answers how often each tool was
+  reached for. Beside it, a bar per tool answers where that tool's time went, and the answer flips from tool to tool: an
+  `Edit` is 1,032 calls that cost two hours of the model writing diffs and under two minutes of actually writing to
+  disk, while a checker run is the other way round. A third stretch shows up when a call came back far too late to have
+  been running, which is a suspended agent rather than a slow tool, so one stalled command doesn't get to make `Bash`
+  look pathological. Under both, a table with all three numbers per tool, never added together, plus how many agents
+  reached for each. `Bash` is broken up by what the command was doing and an MCP server's methods are gathered under the
+  server, so "who used codegraph" is one row rather than four names you have to know to look for. Pick a tool anywhere
+  and the sheet below filters to its calls.
 - **Every derived row**, sortable and filterable, down to sub-second spans.
 
 ## How it works

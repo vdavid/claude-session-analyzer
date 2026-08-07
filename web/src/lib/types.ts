@@ -90,6 +90,14 @@ export interface TimelineTotals {
     wallClockSeconds: number
     /** Every lane's rows added up, so it's larger whenever lanes ran at the same time. */
     laneTimeSeconds: number
+    /**
+     * Lane time minus the two waits whose clock belongs to somebody else: waiting for a person, and
+     * waiting for a teammate. The agent time the session actually cost. A wait on a teammate is
+     * already that teammate's own lane time, so keeping it counts the same work twice.
+     */
+    netSeconds: number
+    /** Net minus the gaps net keeps: stalls, API errors, background-task waits, unknown waits. */
+    activeSeconds: number
     rows: number
     lanes: number
     /** Only the kinds with rows behind them, in the order a legend should show them. */
@@ -105,6 +113,11 @@ export interface TimelineTotals {
  *
  * The counts are calls, not rows: every call leaves a row for composing it and a row for running it,
  * and only the second is counted.
+ *
+ * **A call's time is three numbers, and they're never one.** All three arrive under the group's name,
+ * so a single figure would report a tool as costing what the agent and a suspension cost. `seconds` is
+ * the tool running, `composingSeconds` is the agent writing the calls, `stalledSeconds` is a call that
+ * came back far too late to have been running. `docs/api.md` § The tool breakdown.
  */
 export interface ToolGroupTotal {
     group: string
@@ -116,7 +129,12 @@ export interface ToolGroupTotal {
      */
     category: string
     calls: number
+    /** The tool running, call to result. Not what the group cost: see the two clocks below it. */
     seconds: number
+    /** The agent writing the calls. It's most of what an `Edit` costs and a rounding error on a checker. */
+    composingSeconds: number
+    /** Calls that came back far too late to have been running: a suspended agent, not a slow tool. */
+    stalledSeconds?: number
     /** How many lanes reached for it, which is the answer to "who used this". */
     lanes: number
     errors?: number
@@ -131,7 +149,10 @@ export interface ToolTotal {
     /** The part that varies inside the group: an MCP method, or the program a Bash call ran. */
     leaf: string
     calls: number
+    /** The tool running. Same three clocks as the group above it, at leaf grain. */
     seconds: number
+    composingSeconds: number
+    stalledSeconds?: number
     lanes: number
     errors?: number
     timedOut?: number
