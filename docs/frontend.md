@@ -6,11 +6,11 @@ must-knows for editing; this is the depth.
 ## The two pages
 
 **`/`** says what the tool is in three sentences, puts the corpus totals beside them, and lists every session on the
-machine. One `GET /api/sessions` brings all 725 in 273 KB, so sorting and filtering happen in the browser with no round
-trip and no pagination. A row carries title, project, id prefix, start, elapsed time, subagent count, and transcript
-size; the header row sorts on any of those. Under the list, a collapsed "What these numbers don't say" note holds the
-four caveats a reader needs before trusting anything: thinking spans include model latency, lane time isn't elapsed
-time, stall detection is a heuristic, and a thinking row's subject is borrowed from what came next.
+machine. One `GET /api/sessions` brings every one of them in a few hundred kilobytes, so sorting and filtering happen in
+the browser with no round trip and no pagination. A row carries title, project, id prefix, start, elapsed time, subagent
+count, and transcript size; the header row sorts on any of those. Under the list, a collapsed "What these numbers don't
+say" note holds the four caveats a reader needs before trusting anything: thinking spans include model latency, lane
+time isn't elapsed time, stall detection is a heuristic, and a thinking row's subject is borrowed from what came next.
 
 **`/session/[id]`** analyses one session on load, in six stacked sections:
 
@@ -37,9 +37,10 @@ from another page in the browser, which is the case it exists for.
 
 ### Aggregates first, rows second
 
-The session page fetches `?rows=false` (364 KB on the largest session), renders the charts off it, and only then asks
-for the rows (7.7 MB). Asking for both at once would have the server parsing the same transcript twice at the same time,
-which delays the thing the reader is waiting for. The sheet section says how many rows it's fetching while it waits.
+The session page fetches `?rows=false`, renders every chart off it, and only then asks for the rows, which are an order
+of magnitude larger (`docs/api.md` § What it costs has the measurements, so they can't drift in two places). Asking for
+both at once would have the server parsing the same transcript twice at the same time, which delays the thing the reader
+is waiting for. The sheet section says how many rows it's fetching while it waits.
 
 ### Colour belongs to data
 
@@ -69,10 +70,26 @@ reader touches the legend. Groups inside a family share its colour and are told 
 them, by the table beside the chart, and by the highlight the two share.
 
 The order is the colourblind-safety mechanism rather than a mood: it decides which pairs ever touch. The seven slots
-were validated with the `dataviz` skill's checker in both modes (2026-08-06), worst adjacent pair ΔE 8.7 light and 11.0
-dark under protanopia and deuteranopia, 17.4 and 19.2 under normal vision, every slot over 3:1 on its surface. Re-run it
-before changing a slot, and keep the order. The seventh slot is the neutral everything-else fold, so it sits below the
-chroma floor on purpose.
+were validated in both modes (2026-08-06), worst adjacent pair ΔE 8.7 light and 11.0 dark under protanopia and
+deuteranopia, 17.4 and 19.2 under normal vision, every slot over 3:1 on its surface. The seventh slot is the neutral
+everything-else fold, so it sits below the chroma floor on purpose, and the two flags it draws are expected.
+
+To re-run it, load the `dataviz` skill and run the `validate_palette.js` it ships, passing the slots in `FAMILY_ORDER`
+and **repeating the first one at the end**: a pie closes on itself, so the last slot touches the first, and a linear
+pairlist would miss that pair. The two calls that produced the numbers above, run from the skill's own base directory:
+
+```sh
+# light, against `--csa-surface`
+node scripts/validate_palette.js \
+  "#b5308a,#2f6fc4,#2f7d4f,#7b4fd0,#10a094,#c9611b,#828b98,#b5308a" --mode light --surface "#ffffff"
+# dark, against the dark `--csa-surface`
+node scripts/validate_palette.js \
+  "#cf5a9b,#4f8fd8,#3fa76a,#8a72e0,#1aa892,#d97430,#a8b1bd,#cf5a9b" --mode dark --surface "#161b23"
+```
+
+Two of its checks fail on the neutral by design: it sits below the chroma floor, and in dark it sits above the lightness
+band. Everything else has to pass. Changing a slot means nudging its lightness and re-running until the worst adjacent
+pair clears; changing the _order_ means re-deriving it, which is what produced this one.
 
 ### Type is the system font, deliberately
 

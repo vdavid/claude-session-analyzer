@@ -16,8 +16,12 @@ contract it consumes is `docs/api.md`; read that before touching anything that r
   each sits in its own section behind its own legend. Look a kind or a class up by name, never by array index, because
   the API only sends what a session has.
 - **The tool palette is seven slots in a fixed order, and the order is the safety mechanism.** It decides which pairs
-  touch in the pie, and it's what the `dataviz` skill's validator was run against in both modes. Re-run it before
-  changing a slot, and don't reorder `FAMILY_ORDER` (`src/lib/classes.ts`). Numbers and date: `docs/frontend.md`.
+  touch in the pie. Don't reorder `FAMILY_ORDER` (`src/lib/classes.ts`), and re-run the validator before changing a
+  slot: the exact two commands, the numbers, and the two failures that are by design are in `docs/frontend.md`.
+- **A tool class the engine grows falls silently into the neutral family.** `CLASS_FAMILIES` in `src/lib/classes.ts` is
+  a hand-written map of the 15 classes in `internal/timeline/tool.go`, and a name missing from it is drawn as
+  "Everything else" rather than throwing. That's the right failure for a page, and it's the one that goes unnoticed:
+  adding a `ToolClass` in Go means adding it there in the same change.
 - **Never present a `byKind` share as a share of elapsed time.** It's lane time, which is larger. `docs/api.md` § The
   two numbers that aren't the same.
 - Tailwind tokens are registered `@theme inline` over custom properties. An opacity modifier on one compiles to a

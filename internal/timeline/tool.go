@@ -8,6 +8,10 @@ import (
 
 // ToolClass is what kind of work a tool call was doing. It's read off the call's own arguments, mostly the shell
 // command, because the tool's name alone says almost nothing: nearly every interesting call is a Bash call.
+//
+// Adding one means two edits elsewhere in the same change: `precedence` below, if a command can be read as it, and
+// `CLASS_FAMILIES` in `web/src/lib/classes.ts`, which maps every class onto the colour the tool breakdown draws it in.
+// A class missing from that map is drawn as "Everything else" rather than reported, so nothing fails loudly.
 type ToolClass string
 
 const (
