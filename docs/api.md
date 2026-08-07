@@ -1,7 +1,9 @@
 # The HTTP API
 
-What `claude-session-analyzer serve` answers, and what the web app is built against. `internal/api` renders it; changing
-a field there means changing this.
+What `claude-session-analyzer serve` answers, and what the web app is built against. `internal/report` owns the shapes
+and `internal/api` serves them; changing a tag there means changing this. The CLI's `--json` answers with the same
+shapes from the same code, so both surfaces speak one vocabulary. The corpus-wide `stats` answer is its own shape:
+`docs/stats.md`.
 
 The server binds to `127.0.0.1` and nothing else. A tool that reads every transcript on the machine has no business on
 the network, so the address isn't configurable.
@@ -76,6 +78,7 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
         "until": "2026-08-06T10:11:03.289Z",
         "wallClockSeconds": 264524.119,
         "laneTimeSeconds": 405702.456,
+        "activeSeconds": 118430.204,
         "rows": 15944,
         "lanes": 28,
         "byKind": [{ "kind": "thinking", "seconds": 29450.346, "rows": 2300 }],
@@ -149,12 +152,16 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
 }
 ```
 
-### The two numbers that aren't the same
+### The three numbers that aren't the same
 
 `wallClockSeconds` is how long the session took. `laneTimeSeconds` is every lane's rows added up, which is larger
 whenever lanes ran at the same time: 405,702 s against 264,524 s on the reference session. They answer different
 questions, and presenting one as the other is the mistake this API is shaped to prevent. A pie of `byKind` is a
 breakdown of **lane time**, so say so in the legend.
+
+`activeSeconds` is the third: lane time with every gap kind taken out (`Kind.IsGap()`, so the four waits, `stalled`, and
+`API error`). It's what the agents spent working rather than waiting, and it's a field because it's the number people
+ask for ("net time building this") and the one they'd otherwise compute from the pie and get wrong.
 
 `totals.from` and `totals.until` bracket every lane, so they can sit slightly outside the session's own `start` and
 `end`, which are the lead's alone. On the reference session a subagent outlives the lead by 20 minutes. Both are `null`

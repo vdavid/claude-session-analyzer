@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/vdavid/claude-session-analyzer/internal/report"
 	"github.com/vdavid/claude-session-analyzer/internal/session"
 	"github.com/vdavid/claude-session-analyzer/internal/timeline"
 	"github.com/vdavid/claude-session-analyzer/internal/transcript"
@@ -14,7 +15,9 @@ import (
 func runTimeline(a *app, args []string) error {
 	fs := newFlagSet(a, "timeline")
 	root := fs.String("root", "", "read transcripts from this directory instead of ~/.claude/projects")
-	out := fs.String("out", "", "write the CSV to this file instead of standard output")
+	out := fs.String("out", "", "write the output to this file instead of standard output")
+	asJSON := fs.Bool("json", false, "write the aggregates as JSON instead of a CSV of rows")
+	withRows := fs.Bool("rows", false, "include every row in the JSON, which runs to megabytes on a large session")
 	ids, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -37,14 +40,25 @@ func runTimeline(a *app, args []string) error {
 		return err
 	}
 
+	sum, err := session.Summarize(loc)
+	if err != nil {
+		return fmt.Errorf("Couldn't read session %s: %w", loc.ID, err)
+	}
 	s, err := session.Load(loc, transcript.Options{})
 	if err != nil {
 		return fmt.Errorf("Couldn't read session %s: %w", loc.ID, err)
 	}
 	tl := timeline.Derive(s, timeline.Options{})
 
+	// The JSON leaves the rows out unless they're asked for. A caller wanting every row wants the CSV, and a 983-lane
+	// session's rows are 8 MB, which is a bad thing to hand an agent by accident.
+	write := func(w io.Writer) error { return writeCSV(w, tl) }
+	if *asJSON {
+		write = func(w io.Writer) error { return writeJSON(w, report.ForTimeline(sum, tl, *withRows)) }
+	}
+
 	if *out == "" {
-		return writeCSV(a.out, tl)
+		return write(a.out)
 	}
 
 	f, err := os.Create(*out)
@@ -53,7 +67,7 @@ func runTimeline(a *app, args []string) error {
 	}
 	defer f.Close() //nolint:errcheck // closed again below, where the error matters
 
-	if err := writeCSV(f, tl); err != nil {
+	if err := write(f); err != nil {
 		return err
 	}
 	if err := f.Close(); err != nil {

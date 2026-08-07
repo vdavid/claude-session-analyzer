@@ -5,6 +5,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/vdavid/claude-session-analyzer/internal/report"
 	"github.com/vdavid/claude-session-analyzer/internal/session"
 	"github.com/vdavid/claude-session-analyzer/internal/timeline"
 )
@@ -24,6 +25,9 @@ func runSessions(a *app, args []string) error {
 	fs := newFlagSet(a, "sessions")
 	root := fs.String("root", "", "read transcripts from this directory instead of ~/.claude/projects")
 	limit := fs.Int("limit", defaultLimit, "show at most this many sessions, or 0 for all of them")
+	asJSON := fs.Bool("json", false, "write the listing as JSON instead of a table")
+	var only scope
+	only.register(fs)
 	rest, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -31,19 +35,38 @@ func runSessions(a *app, args []string) error {
 	if len(rest) > 0 {
 		return usagef("`%s sessions` doesn't take arguments, and it got %q.", binary, rest[0])
 	}
+	keep, err := only.filter()
+	if err != nil {
+		return err
+	}
 
 	dir, err := transcriptRoot(*root)
 	if err != nil {
 		return err
 	}
-	sums, err := session.List(dir)
+	all, err := session.List(dir)
 	if err != nil {
 		if problem := missingRoot(dir, err); problem != nil {
 			return problem
 		}
 		return fmt.Errorf("Couldn't read the transcripts in %s: %w", dir, err)
 	}
+
+	sums := make([]session.Summary, 0, len(all))
+	for _, s := range all {
+		if keep(s) {
+			sums = append(sums, s)
+		}
+	}
+
+	if *asJSON {
+		return writeSessionsJSON(a, dir, sums, *limit)
+	}
 	if len(sums) == 0 {
+		if len(all) > 0 {
+			fmt.Fprintf(a.out, "None of the %s sessions under %s match those filters.\n", count(len(all)), dir)
+			return nil
+		}
 		fmt.Fprintf(a.out, "No sessions under %s yet.\n", dir)
 		return nil
 	}
@@ -78,6 +101,27 @@ func runSessions(a *app, args []string) error {
 	fmt.Fprintf(a.out, "\n%s sessions, %s subagents, %s on disk. Times are local.\n",
 		count(len(sums)), count(subagents), humanBytes(bytes))
 	return nil
+}
+
+// writeSessionsJSON answers with the same shape the HTTP API's `/api/sessions` does, so a caller learns one
+// vocabulary. The totals cover every session the filters kept, not only the ones a limit showed, which is what makes
+// "how many sessions did I have in July" a field rather than a count of the array.
+func writeSessionsJSON(a *app, dir string, sums []session.Summary, limit int) error {
+	body := report.SessionList{Root: dir, Sessions: []report.Session{}}
+	for _, s := range sums {
+		body.Totals.Sessions++
+		body.Totals.Subagents += s.Subagents
+		body.Totals.Bytes += s.Bytes
+	}
+
+	shown := sums
+	if limit > 0 && limit < len(shown) {
+		shown = shown[:limit]
+	}
+	for _, s := range shown {
+		body.Sessions = append(body.Sessions, report.ForSession(s))
+	}
+	return writeJSON(a.out, body)
 }
 
 // length is how long a session ran, blank for one whose records carry no timestamps.

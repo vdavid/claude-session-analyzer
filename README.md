@@ -10,8 +10,10 @@ Scrolling a transcript tells you what happened. It doesn't tell you that a three
 its wall clock with the lead idle, or that one agent sat suspended for six hours on an `rm`. This reads the transcripts
 Claude Code already wrote to your disk and answers that.
 
-Two surfaces over one engine: a command line that writes a CSV, and a local web app with a time-spent donut, an
-agent-liveness swimlane, a breakdown of the tools the agents used, and every derived row in a sortable sheet.
+Two surfaces over one engine. A command line that writes a CSV, answers in JSON, and takes queries: "how much of this
+session went into the checker script, and in how many runs?", "did my agents reach for codegraph or for grep this
+year?". And a local web app with a time-spent donut, an agent-liveness swimlane, a breakdown of the tools the agents
+used, and every derived row in a sortable sheet.
 
 ## Status
 
@@ -21,8 +23,9 @@ because nothing in it is personal.
 ## What you need
 
 Go, Node, and pnpm, all pinned in `.mise.toml` if you use [mise](https://mise.jdx.dev). Plus some Claude Code sessions:
-the tool reads `~/.claude/projects/`, or `$CLAUDE_CONFIG_DIR/projects` when that's set. Nothing is uploaded, written
-back, or cached.
+the tool reads `~/.claude/projects/`, or `$CLAUDE_CONFIG_DIR/projects` when that's set. Nothing is uploaded, and nothing
+is ever written back to your transcripts. Querying across every session keeps a summary of each one under
+`~/.cache/claude-session-analyzer/`, which you can delete at any time.
 
 ## Quick start
 
@@ -37,20 +40,60 @@ Then open http://127.0.0.1:19428. The front page lists every session on the mach
 went. Both services bind to `127.0.0.1` and nothing else: a tool that reads every transcript on your machine has no
 business on the network.
 
-The command line, if you'd rather have a CSV:
+The command line:
 
 ```sh
-go build -o claude-session-analyzer ./cmd/claude-session-analyzer
+go install ./cmd/claude-session-analyzer
 
-./claude-session-analyzer sessions                 # what's on disk, newest first
-./claude-session-analyzer timeline 532ac591        # the CSV, to standard output
-./claude-session-analyzer timeline 532ac591 --out timeline.csv
-./claude-session-analyzer serve                    # the API alone, on http://127.0.0.1:19427
+claude-session-analyzer sessions                 # what's on disk, newest first
+claude-session-analyzer sessions --json --since 2026-07-01 --limit 0
+claude-session-analyzer timeline 532ac591        # the CSV, to standard output
+claude-session-analyzer timeline 532ac591 --json # the same session, already summed
+claude-session-analyzer serve                    # the API alone, on http://127.0.0.1:19427
 ```
 
-A session id can be any prefix that matches one session, which is why `532ac591` works. `sessions` lists 725 sessions
+A session id can be any prefix that matches one session, which is why `532ac591` works. `sessions` lists 735 sessions
 and 3.8 GB in well under a second, because it reads the two ends of each transcript rather than any of the middle.
-`--root` points either command somewhere other than the default.
+`--root` points any command somewhere other than the default.
+
+## Asking questions
+
+`stats` is one grammar over one session or over every session you have: filter, group, add up.
+
+```sh
+claude-session-analyzer cache warm               # once, 3.9 s over 735 sessions
+
+# Where did one session's time go, and how much was actual work?
+claude-session-analyzer stats 532ac591 --group-by kind
+
+# How long did the checker script take, over how many runs, and what share of the time?
+claude-session-analyzer stats 532ac591 --where class=checker --group-by leaf
+
+# Did the agents reach for codegraph or for grep this year?
+claude-session-analyzer stats --since 2026-01-01 --where class=search,mcp --group-by group
+
+# Which agents used a given tool?
+claude-session-analyzer stats --where 'group=codegraph*' --group-by agent
+```
+
+Dimensions are `kind`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, and `project`, for both
+`--group-by` and `--where`. `--vocabulary` prints every valid value. `--json` gives the machine-readable answer, and
+every answer carries all three denominators, because elapsed time, agent time, and working time are different numbers.
+
+Warming keeps a summary of each session under `~/.cache/claude-session-analyzer/` (33 MB against 3.8 GB of transcripts),
+so a query across everything takes about a quarter of a second. `cache info` says what's stored and `cache clear`
+removes it.
+
+## Pointing your own agents at it
+
+`skills/claude-session-stats/` is a Claude Code skill that teaches an agent this vocabulary, so "how much of yesterday
+was me keeping agents waiting?" reaches for the CLI on its own. Install it by linking it in:
+
+```sh
+ln -s "$PWD/skills/claude-session-stats" ~/.claude/skills/claude-session-stats
+```
+
+It's a plain CLI underneath, so anything that can run a command can use it, with or without the skill.
 
 ## The CSV
 

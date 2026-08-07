@@ -38,6 +38,18 @@ func commands() []command {
 			run:     runTimeline,
 		},
 		{
+			name:    "stats",
+			summary: "Ask where the time went, over one session or all of them",
+			usage:   "[session-id]",
+			run:     runStats,
+		},
+		{
+			name:    "cache",
+			summary: "Warm, inspect, or clear the digest cache a corpus query reads",
+			usage:   "warm|info|clear",
+			run:     runCache,
+		},
+		{
 			name:    "serve",
 			summary: "Serve the API on 127.0.0.1, for the web app",
 			run:     runServe,

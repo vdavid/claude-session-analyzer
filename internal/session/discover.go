@@ -118,6 +118,61 @@ func Find(root, id string) (Location, error) {
 	}
 }
 
+// Locations is every session under root, sorted by project slug then id, each filled the way Find fills one.
+//
+// Find re-reads the whole root per lookup, so locating all 725 sessions on this machine that way is 725 scans. This is
+// one, which is what a corpus walk wants.
+//
+// A project directory that can't be read is skipped rather than sinking the walk, the same way List treats one:
+// transcripts get written while the tool runs, and the two have to agree on which sessions exist.
+func Locations(root string) ([]Location, error) {
+	slugs, err := os.ReadDir(root)
+	if err != nil {
+		return nil, fmt.Errorf("read the transcript root %s: %w", root, err)
+	}
+
+	var found []Location
+	dirs := map[string][]string{}
+	for _, slug := range slugs {
+		if !slug.IsDir() {
+			continue
+		}
+		dir := filepath.Join(root, slug.Name())
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() {
+				dirs[name] = append(dirs[name], filepath.Join(dir, name))
+				continue
+			}
+			if filepath.Ext(name) != ".jsonl" {
+				continue
+			}
+			found = append(found, Location{ID: strings.TrimSuffix(name, ".jsonl"), ProjectSlug: slug.Name()})
+		}
+	}
+
+	sort.Slice(found, func(i, j int) bool {
+		if found[i].ProjectSlug != found[j].ProjectSlug {
+			return found[i].ProjectSlug < found[j].ProjectSlug
+		}
+		return found[i].ID < found[j].ID
+	})
+
+	out := make([]Location, 0, len(found))
+	for _, loc := range found {
+		filled, err := fill(root, loc, dirs[loc.ID])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, filled)
+	}
+	return out, nil
+}
+
 // fill completes a match with its paths. dirs are every directory named after the session, wherever they sit.
 func fill(root string, loc Location, dirs []string) (Location, error) {
 	loc.TranscriptPath = filepath.Join(root, loc.ProjectSlug, loc.ID+".jsonl")

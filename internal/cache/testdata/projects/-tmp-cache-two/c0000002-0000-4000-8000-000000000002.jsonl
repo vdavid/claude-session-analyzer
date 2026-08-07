@@ -1,0 +1,3 @@
+{"type": "custom-title", "customTitle": "Cache fixture, no lanes", "sessionId": "c0000002-0000-4000-8000-000000000002", "cwd": "/tmp/cache-two", "version": "2.1.220"}
+{"type": "user", "timestamp": "2026-08-04T10:00:00.000Z", "message": {"role": "user", "content": "Rename the file."}, "userType": "external", "sessionId": "c0000002-0000-4000-8000-000000000002", "cwd": "/tmp/cache-two", "version": "2.1.220"}
+{"type": "assistant", "timestamp": "2026-08-04T10:00:03.000Z", "requestId": "req_1", "message": {"model": "claude-opus-5", "content": [{"type": "text", "text": "Renamed."}], "usage": {"input_tokens": 100, "output_tokens": 20}}, "sessionId": "c0000002-0000-4000-8000-000000000002", "cwd": "/tmp/cache-two", "version": "2.1.220"}
