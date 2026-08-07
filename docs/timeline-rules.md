@@ -135,8 +135,8 @@ as a wait. A boundary reporting no duration marks the moment and claims no time.
 A stall says "the agent was suspended", an accusation. The line depends on what the call was doing:
 
 - **An hour** for work with no plausible long form: `rm`, `ls`, `grep`, `git`, a file read, an MCP round trip.
-- **Twelve hours** for work that earns its time: a build, a test suite, a checker script, a dev server, a poll loop, or
-  spawning a teammate.
+- **Twelve hours** for work that earns its time: a build, a lint over a whole workspace, a test suite, a checker script,
+  a dev server, a poll loop, or spawning a teammate.
 
 Three kinds of call are never stalls whatever they cost. One the harness timed out was ended on purpose. One whose
 result never arrived has no end to measure, because it was closed the moment we stopped reading. And a tool blocking
@@ -181,6 +181,39 @@ Both names come out of one read of the command, which is also where its class co
 after the costliest thing in it, so `git add -A && pnpm check` is a checker run and `curl … | jq` is a fetch: a network
 round trip explains a command's time better than reading what it fetched does. Every class a command can be read as has
 to be in that precedence list, or it can never outrank the plain shell command every command starts out as.
+
+### A class says what the work was for, not what it mechanically is
+
+`cargo check` compiles. Read by mechanism it's a build; read by purpose it's a verification that produces nothing, and
+the breakdown answers "what was the agent doing". Purpose wins, so the classes split on what a call leaves behind:
+
+- **`build`** produces an artifact: `cargo build`, `cargo install`, `go build`, `go generate`, `pnpm build`,
+  `tsc --build`, `webpack`, `esbuild`, `xcodebuild`, `gcc`, `javac`, `gradle`, `mvn`. `cargo doc` is here too: HTML you
+  can open is an artifact.
+- **`lint`** verifies and leaves nothing: `cargo check`, `cargo clippy`, `cargo fmt`, `go vet`, `gofmt`, bare `tsc`,
+  `prettier`, `eslint`, `svelte-check`, `ruff`, `golangci-lint`.
+- **`checker`** is the project's own umbrella gate, `pnpm check` or `make check` or a `check.sh` reached by path, and
+  stays separate from the linters running inside it. "The gate took 110 hours over 7,774 runs" and "clippy took 49
+  minutes of it" are different questions, and folding one into the other loses both. A runner script called `lint`,
+  `typecheck`, or `format` is a project's own gate by the same convention as `check`.
+
+A name alone still can't be trusted, which is why these need a rule at all: `cargo check` and `pnpm check` share a word
+and are different animals, and `tsc` is one program doing both jobs (`--build` or `-b` emits, anything else typechecks).
+Where a subcommand means different work in different toolchains, the pair decides: `cargo doc` renders HTML, `go doc`
+prints a package's comments to the terminal, so that one is a file read.
+
+`lint` sits under `build` and `test` in the precedence list and over `git`, so `cargo clippy && cargo build` is a build,
+`cargo fmt && cargo test` is a test run, and `cargo fmt && git add -A` is a lint. It takes the generous stall line
+(below) beside them, because a clippy run over a workspace earns its minutes the same way a build does.
+
+Measured over the whole corpus 2026-08-08, 736 sessions: the split moved 2,028 calls and 9h56m out of `build`, leaving
+1,433 calls and 5h42m there, and picked up another 2h47m of formatters and linters that had been reading as `shell`, a
+pipeline's `grep`, or a `wc -l`. `lint` lands at 2,558 calls and 12h01m across 182 sessions. `test` grew 1h16m, which is
+the honest half of the same change: a `cargo fmt && cargo test` had been named after its lint prefix.
+
+Managing the harness is `agent` work rather than the thing it resembles: `ToolSearch` searches for tools, not for code,
+and `EnterWorktree`, `ExitWorktree`, and `TaskStop` are how a teammate is put to work and stopped. `Skill` stays
+unrecognised, because what a skill did is whatever it ran, and nothing in the call says.
 
 Two things a leaf has to see through, both found by reading reference session's own output:
 

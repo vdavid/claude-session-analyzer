@@ -17,9 +17,9 @@ import (
 //   - Cheap classes have no plausible long form: removing a file, reading one, listing a directory, grepping a tree, a
 //     git command, an MCP round trip. An hour of that isn't the tool working, even over a slow network mount. The
 //     stall that prompted this tool was a 6h15m `rm` plus `du -sh`, six times over the line.
-//   - Heavy classes earn their time: a build, a test suite, a checker script, a dev server the agent left running, a
-//     wait loop that exists to block, a teammate the agent is blocked on. Twelve hours is past anything honest and
-//     still catches a suspension that ran overnight.
+//   - Heavy classes earn their time: a build, a lint over a whole workspace, a test suite, a checker script, a dev
+//     server the agent left running, a wait loop that exists to block, a teammate the agent is blocked on. Twelve hours
+//     is past anything honest and still catches a suspension that ran overnight.
 //
 // Two calls are never stalls whatever they cost. One that timed out was ended on purpose by the harness, and one whose
 // result never arrived has no end to measure: we closed it at the moment we stopped reading.
@@ -45,7 +45,7 @@ const timeoutSlack = time.Minute
 // stallThreshold is how long this class may run before its row is called a stall.
 func stallThreshold(class ToolClass, opts Options) time.Duration {
 	switch class {
-	case ClassBuild, ClassTest, ClassChecker, ClassDevServer, ClassWait, ClassAgent:
+	case ClassBuild, ClassLint, ClassTest, ClassChecker, ClassDevServer, ClassWait, ClassAgent:
 		return opts.HeavyStall
 	default:
 		return opts.CheapStall

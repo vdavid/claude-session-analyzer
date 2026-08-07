@@ -1,8 +1,8 @@
 /**
  * How a tool call's class is drawn and described.
  *
- * The engine reads a call's **class** off what it was doing: 15 of them, from `checker` to `other`
- * (`internal/timeline/tool.go`). Fifteen colours is more than any palette can keep apart, so the
+ * The engine reads a call's **class** off what it was doing: 16 of them, from `checker` to `other`
+ * (`internal/timeline/tool.go`). Sixteen colours is more than any palette can keep apart, so the
  * chart colours a call by its **family** instead: seven, in a fixed order, each a validated slot in
  * `app.css`. The order is the colourblind-safety mechanism rather than a mood, so don't reorder it
  * without re-running the `dataviz` skill's validator over both modes.
@@ -86,6 +86,7 @@ const CLASS_FAMILIES: Record<string, ToolFamily> = {
     'file write': 'files',
     checker: 'gates',
     build: 'gates',
+    lint: 'gates',
     test: 'gates',
     git: 'vcs',
     search: 'search',

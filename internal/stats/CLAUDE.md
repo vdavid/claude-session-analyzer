@@ -44,7 +44,7 @@ Filter, group, add up. Every question an agent or a person asks about where the 
   it before asking.
 - **Don't import `internal/cache`.** `Source` is the adapter, and the CLI fills it from a digest or, for a lane
   question, from the detail. This package stays a pure function over cells.
-- **The class list is a copy.** The engine declares its 15 tool classes in `internal/timeline/tool.go` and exports no
+- **The class list is a copy.** The engine declares its 16 tool classes in `internal/timeline/tool.go` and exports no
   list of them, so `classes` in `spec.go` is a duplicate. `TestTheClassListMatchesTheEngines` reads that file and fails
   with the name to add here.
 - **A `\,` is a literal comma in a filter value.** The `waiting, reason unknown` kind carries the separator inside it,

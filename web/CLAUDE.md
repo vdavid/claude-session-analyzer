@@ -19,7 +19,7 @@ it consumes: `docs/api.md`. Read that before touching anything that reads a JSON
   in the pie. Don't reorder `FAMILY_ORDER` (`src/lib/classes.ts`), and re-run the validator before changing a slot:
   exact two commands, the numbers, and the two failures that are by design are in `docs/frontend.md`.
 - **A tool class the engine grows falls silently into the neutral family.** `CLASS_FAMILIES` in `src/lib/classes.ts` is
-  a hand-written map of the 15 classes in `internal/timeline/tool.go`; a name missing from it draws as "Everything else"
+  a hand-written map of the 16 classes in `internal/timeline/tool.go`; a name missing from it draws as "Everything else"
   rather than throwing. Right failure for a page, and the one that goes unnoticed: adding a `ToolClass` in Go means
   adding it there in the same change.
 - **Never present a `byKind` share as a share of elapsed time.** It's lane time, which is larger. `docs/api.md` § The
@@ -36,7 +36,7 @@ it consumes: `docs/api.md`. Read that before touching anything that reads a JSON
 - `src/lib/`: `api.ts` (every call to the server, errors as `ApiError` with a `code` to branch on), `types.ts` (JSON
   shapes), `format.ts` (durations, instants, bytes; `formatBytes` matches `humanBytes` in `internal/cli/format.go`),
   `kinds.ts` (the eleven kinds: legend order, colour variable, family, and the sentence keeping each honest),
-  `classes.ts` (engine's 15 tool classes mapped onto seven drawn families, in the order the palette was validated in),
+  `classes.ts` (engine's 16 tool classes mapped onto seven drawn families, in the order the palette was validated in),
   `theme.svelte.ts` (stylesheet read back out for canvas, following `prefers-color-scheme`).
 - `src/lib/transform/`: the tested layer. API JSON into chart series. Nothing else is unit-tested. Must-knows:
   `web/src/lib/transform/CLAUDE.md`.

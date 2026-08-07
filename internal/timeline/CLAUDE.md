@@ -18,6 +18,12 @@ Where judgement lives, and where being wrong is invisible in output. Every rule 
   the reason it's a predicate is in its doc comment.
 - **Every class a command can be read as has to be in `precedence`** (`tool.go`). One that isn't can never outrank the
   `ClassShell` a command starts out as, so it gets mapped and then never returned. `ClassWeb` sat outside it once.
+- **A class is what the work was for, not what it mechanically is.** `cargo check` compiles and is a `lint`, because it
+  produces nothing; `cargo doc` renders HTML and is a `build`. Reasoning and the corpus numbers:
+  `docs/timeline-rules.md`.
+- **Adding a `ToolClass` costs four edits in the same change**: `precedence` (`tool.go`), `stallThreshold` (`stall.go`)
+  if the work earns the generous line, `classes` (`internal/stats/spec.go`), and `CLASS_FAMILIES`
+  (`web/src/lib/classes.ts`). Only the third fails loudly.
 - **A wait ended by a task notification asks whose task it was.** A live other lane's task makes it
   `waiting for a teammate`; the lane's own, a finished lane's, or an id no lane claims stays
   `waiting for a background task`. `attributeTaskWaits` (`wait.go`) runs as a post-pass in `Derive`, after the lane

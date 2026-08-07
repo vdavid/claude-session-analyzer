@@ -9,17 +9,30 @@ import (
 // ToolClass is what kind of work a tool call was doing. It's read off the call's own arguments, mostly the shell
 // command, because the tool's name alone says almost nothing: nearly every interesting call is a Bash call.
 //
-// Adding one means two edits elsewhere in the same change: `precedence` below, if a command can be read as it, and
-// `CLASS_FAMILIES` in `web/src/lib/classes.ts`, which maps every class onto the colour the tool breakdown draws it in.
-// A class missing from that map is drawn as "Everything else" rather than reported, so nothing fails loudly.
+// A class is what the work was for, not what it mechanically is: `cargo check` compiles and produces nothing, so it's a
+// lint rather than a build, because the breakdown answers "what was the agent doing".
+//
+// Adding one means three edits elsewhere in the same change, and a fourth where it applies:
+//
+//   - `precedence` below, if a command can be read as it. One that isn't in there can never outrank the `ClassShell` a
+//     command starts out as, so it would be mapped and then never returned. Silent.
+//   - `classes` in `internal/stats/spec.go`, which is what `--vocabulary` prints. This is the one that fails loudly:
+//     TestTheClassListMatchesTheEngines reads this file and says what to add.
+//   - `CLASS_FAMILIES` in `web/src/lib/classes.ts`, which maps every class onto the colour the tool breakdown draws it
+//     in. A class missing from that map is drawn as "Everything else" rather than reported. Silent.
+//   - `stallThreshold` in `stall.go`, if the work legitimately runs for hours, or a long honest call gets called a
+//     stall.
 type ToolClass string
 
 const (
 	// ClassChecker is the project's own gate: `pnpm check`, `./scripts/check.sh`, `make check`. Running for minutes is
 	// its job.
 	ClassChecker ToolClass = "checker"
-	// ClassBuild is a compiler or bundler.
+	// ClassBuild is a compiler or bundler: work that produces an artifact.
 	ClassBuild ToolClass = "build"
+	// ClassLint is work that verifies without producing anything: `cargo check`, `cargo clippy`, `go vet`, a formatter,
+	// a typechecker. Some of it compiles, which is the mechanism rather than the purpose.
+	ClassLint ToolClass = "lint"
 	// ClassTest is a test runner.
 	ClassTest ToolClass = "test"
 	// ClassDevServer is a long-running process the agent started to work against.
@@ -55,10 +68,14 @@ const (
 // is a build. The tail of the list is the ordinary utilities, which only get to name a command when nothing else is
 // happening in it.
 //
+// `ClassLint` sits under both `ClassBuild` and `ClassTest`, because a lint is the cheap half of every pair it shows up
+// in: `cargo clippy && cargo build` is a build, and `cargo fmt && cargo test` is a test run. It sits over `ClassGit`,
+// which is the rest of what a lint travels with (`cargo fmt && git add -A`).
+//
 // Every class a command can be read as has to be in here. One that isn't can never outrank the `ClassShell` a command
 // starts out as, so it would be mapped and then never returned.
 var precedence = []ToolClass{
-	ClassWait, ClassDevServer, ClassChecker, ClassBuild, ClassTest, ClassGit, ClassWeb,
+	ClassWait, ClassDevServer, ClassChecker, ClassBuild, ClassTest, ClassLint, ClassGit, ClassWeb,
 	ClassFileWrite, ClassSearch, ClassFileRead, ClassShell,
 }
 
@@ -72,22 +89,27 @@ var precedenceRank = func() map[ToolClass]int {
 
 // toolClasses maps the tools that say what they are by name. Bash isn't here: its class comes from its command.
 var toolClasses = map[string]ToolClass{
-	"Read":            ClassFileRead,
-	"NotebookRead":    ClassFileRead,
-	"Write":           ClassFileWrite,
-	"Edit":            ClassFileWrite,
-	"MultiEdit":       ClassFileWrite,
-	"NotebookEdit":    ClassFileWrite,
-	"Glob":            ClassSearch,
-	"Grep":            ClassSearch,
-	"ToolSearch":      ClassSearch,
-	"Agent":           ClassAgent,
-	"Task":            ClassAgent,
-	"SendMessage":     ClassAgent,
-	"TaskCreate":      ClassAgent,
-	"TaskUpdate":      ClassAgent,
-	"TaskList":        ClassAgent,
-	"TaskGet":         ClassAgent,
+	"Read":         ClassFileRead,
+	"NotebookRead": ClassFileRead,
+	"Write":        ClassFileWrite,
+	"Edit":         ClassFileWrite,
+	"MultiEdit":    ClassFileWrite,
+	"NotebookEdit": ClassFileWrite,
+	"Glob":         ClassSearch,
+	"Grep":         ClassSearch,
+	"Agent":        ClassAgent,
+	"Task":         ClassAgent,
+	"SendMessage":  ClassAgent,
+	"TaskCreate":   ClassAgent,
+	"TaskUpdate":   ClassAgent,
+	"TaskList":     ClassAgent,
+	"TaskGet":      ClassAgent,
+	"TaskStop":     ClassAgent,
+	// Managing the harness rather than the code: `ToolSearch` searches for tools, and a worktree is where a teammate is
+	// put to work.
+	"ToolSearch":      ClassAgent,
+	"EnterWorktree":   ClassAgent,
+	"ExitWorktree":    ClassAgent,
 	"AskUserQuestion": ClassAsk,
 	"ExitPlanMode":    ClassAsk,
 	"WebFetch":        ClassWeb,
@@ -101,9 +123,13 @@ var toolClasses = map[string]ToolClass{
 var programClasses = map[string]ToolClass{
 	"sleep": ClassWait,
 
-	"tsc": ClassBuild, "webpack": ClassBuild, "esbuild": ClassBuild, "rollup": ClassBuild,
+	"webpack": ClassBuild, "esbuild": ClassBuild, "rollup": ClassBuild,
 	"xcodebuild": ClassBuild, "gcc": ClassBuild, "clang": ClassBuild,
 	"javac": ClassBuild, "gradle": ClassBuild, "mvn": ClassBuild,
+
+	"gofmt": ClassLint, "goimports": ClassLint, "golangci-lint": ClassLint, "staticcheck": ClassLint,
+	"prettier": ClassLint, "eslint": ClassLint, "biome": ClassLint, "svelte-check": ClassLint,
+	"ruff": ClassLint, "mypy": ClassLint, "shellcheck": ClassLint,
 
 	"pytest": ClassTest, "vitest": ClassTest, "jest": ClassTest, "nextest": ClassTest,
 	"playwright": ClassTest, "phpunit": ClassTest,
@@ -140,13 +166,24 @@ var runnerScripts = map[string]ToolClass{
 	"dev": ClassDevServer, "start": ClassDevServer, "serve": ClassDevServer, "preview": ClassDevServer,
 }
 
-// toolchainSubcommands maps the subcommand of a language toolchain to a class. `cargo check` compiles, which is why a
-// name alone can't be trusted: `pnpm check` is a different animal entirely.
+// toolchainSubcommands maps the subcommand of a language toolchain to a class. A name alone can't be trusted either
+// way: `cargo check` compiles without producing anything, so it's a lint, and `pnpm check` shares the word while being
+// a project's own gate.
+//
+// The split is by what the work was for. `build`, `install`, `generate`, and `doc` leave something behind; `check`,
+// `clippy`, `fmt`, and `vet` only report on what's there.
 var toolchainSubcommands = map[string]ToolClass{
-	"build": ClassBuild, "check": ClassBuild, "clippy": ClassBuild, "fmt": ClassBuild,
-	"install": ClassBuild, "generate": ClassBuild, "vet": ClassBuild, "doc": ClassBuild,
+	"build": ClassBuild, "install": ClassBuild, "generate": ClassBuild, "doc": ClassBuild,
+	"check": ClassLint, "clippy": ClassLint, "fmt": ClassLint, "vet": ClassLint,
 	"test": ClassTest, "nextest": ClassTest, "bench": ClassTest,
 	"run": ClassDevServer,
+}
+
+// toolchainOverrides are the toolchain-and-subcommand pairs the shared table above reads wrong, because the word means
+// different work in different toolchains. `cargo doc` renders HTML you can open, so it's a build; `go doc` prints a
+// package's comments to the terminal, which is how an agent reads a package rather than anything it produces.
+var toolchainOverrides = map[string]ToolClass{
+	"go doc": ClassFileRead,
 }
 
 var toolchains = map[string]bool{"cargo": true, "go": true, "dotnet": true, "swift": true}
@@ -322,6 +359,9 @@ func classifySegment(words []string, ctx cmdContext) ToolClass {
 		return ClassShell
 	}
 
+	if program == "tsc" {
+		return tscClass(words)
+	}
 	if class, ok := programClasses[program]; ok {
 		return class
 	}
@@ -329,6 +369,9 @@ func classifySegment(words []string, ctx cmdContext) ToolClass {
 		return runnerClass(words)
 	}
 	if toolchains[program] && len(words) > 1 {
+		if class, ok := toolchainOverrides[program+" "+words[1]]; ok {
+			return class
+		}
 		if class, ok := toolchainSubcommands[words[1]]; ok {
 			return class
 		}
@@ -340,6 +383,17 @@ func classifySegment(words []string, ctx cmdContext) ToolClass {
 	return ClassShell
 }
 
+// tscClass tells the TypeScript compiler's two jobs apart. Asked to build a project it emits JavaScript; asked anything
+// else it typechecks and leaves nothing behind, which is the overwhelmingly common call and a lint.
+func tscClass(words []string) ToolClass {
+	for _, w := range words[1:] {
+		if w == "--build" || w == "-b" {
+			return ClassBuild
+		}
+	}
+	return ClassLint
+}
+
 // runnerClass reads what a package runner was asked to run.
 func runnerClass(words []string) ToolClass {
 	target := runnerTarget(words)
@@ -348,6 +402,9 @@ func runnerClass(words []string) ToolClass {
 	}
 	if class, ok := runnerScripts[target]; ok {
 		return class
+	}
+	if target == "tsc" {
+		return tscClass(words)
 	}
 	if class, ok := programClasses[target]; ok {
 		return class

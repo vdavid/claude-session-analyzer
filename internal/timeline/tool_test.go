@@ -25,14 +25,31 @@ func TestClassifyCommand(t *testing.T) {
 		// A fetch explains a command's time better than reading what it fetched does.
 		{"curl -s https://example.com | jq .name", ClassWeb},
 
-		// Build and test runners are told apart by the program, not by the subcommand: `cargo check` builds, and
-		// `pnpm check` is a project's own gate.
+		// A class comes from what the work was for, not from what it mechanically does: `cargo check` compiles and
+		// produces nothing, so it's a lint rather than a build.
 		{"cargo build --release", ClassBuild},
-		{"cargo check -p app --lib", ClassBuild},
-		{"cargo clippy --all-targets", ClassBuild},
+		{"cargo install --path .", ClassBuild},
 		{"go build ./...", ClassBuild},
-		{"tsc --noEmit", ClassBuild},
+		{"go generate ./...", ClassBuild},
+		// `cargo doc` renders HTML you can open; `go doc` prints a package's comments to the terminal, which is reading.
+		{"cargo doc --no-deps", ClassBuild},
+		{"go doc ./internal/timeline", ClassFileRead},
+		{"tsc --build", ClassBuild},
 		{"pnpm build", ClassBuild},
+		{"cargo check -p app --lib", ClassLint},
+		{"cargo clippy --all-targets -- -D warnings", ClassLint},
+		{"cargo fmt --check", ClassLint},
+		{"go vet ./...", ClassLint},
+		{"gofmt -l .", ClassLint},
+		{"tsc --noEmit", ClassLint},
+		{"prettier --check .", ClassLint},
+		{"eslint src --max-warnings 0", ClassLint},
+		{"ruff check .", ClassLint},
+		{"golangci-lint run", ClassLint},
+		// A package runner is whatever it was asked to run, linters included.
+		{"pnpm eslint web/src", ClassLint},
+		{"npx prettier --write docs", ClassLint},
+		{"pnpm tsc --noEmit", ClassLint},
 		{"cargo test -p app --lib", ClassTest},
 		{"cargo nextest run -p app", ClassTest},
 		{"go test ./... -run Timeline", ClassTest},
@@ -59,6 +76,11 @@ func TestClassifyCommand(t *testing.T) {
 
 		// A compound command is named after the costliest thing in it.
 		{"git add -A && pnpm check -q clippy svelte-check", ClassChecker},
+		// A lint sits below the work that produces something, so the build names this one and the test names that one.
+		{"cargo clippy --all-targets && cargo build --release", ClassBuild},
+		{"cargo fmt && cargo test -p app", ClassTest},
+		// With nothing costlier in it, the lint names the command.
+		{"cargo fmt && git add -A && cargo clippy", ClassLint},
 		{"cd apps/desktop && npx vitest run 2>&1 | tail -25", ClassTest},
 		{`D="$HOME/state"; rm -f "$D"/*.db 2>/dev/null; ls "$D" | grep -i cache; du -sh "$D"`, ClassFileWrite},
 
@@ -91,15 +113,22 @@ func TestClassifyTool(t *testing.T) {
 		{transcriptBlockCase{"NotebookEdit", "file_path", "/tmp/a"}, ClassFileWrite},
 		{transcriptBlockCase{"Glob", "pattern", "**/*.go"}, ClassSearch},
 		{transcriptBlockCase{"Grep", "pattern", "panic"}, ClassSearch},
-		{transcriptBlockCase{"ToolSearch", "query", "select:Read"}, ClassSearch},
 		{transcriptBlockCase{"Agent", "description", "review the plan"}, ClassAgent},
 		{transcriptBlockCase{"Task", "description", "review the plan"}, ClassAgent},
 		{transcriptBlockCase{"SendMessage", "message", "ping"}, ClassAgent},
+		// Managing the harness is teamwork, not code work: `ToolSearch` looks for tools rather than for code, and a
+		// worktree is where a teammate is put to work.
+		{transcriptBlockCase{"ToolSearch", "query", "select:Read"}, ClassAgent},
+		{transcriptBlockCase{"EnterWorktree", "branch", "x"}, ClassAgent},
+		{transcriptBlockCase{"ExitWorktree", "branch", "x"}, ClassAgent},
+		{transcriptBlockCase{"TaskStop", "taskId", "t1"}, ClassAgent},
+		// A skill is whatever the skill does, which nothing here can read, so it stays unrecognised.
+		{transcriptBlockCase{"Skill", "skill", "daily-wrap"}, ClassOther},
 		{transcriptBlockCase{"WebFetch", "url", "https://example.com"}, ClassWeb},
 		{transcriptBlockCase{"WebSearch", "query", "rust"}, ClassWeb},
 		{transcriptBlockCase{"mcp__tauri__webview_execute_js", "script", "1+1"}, ClassMCP},
 		{transcriptBlockCase{"Bash", "command", "cargo build"}, ClassBuild},
-		{transcriptBlockCase{"EnterWorktree", "branch", "x"}, ClassOther},
+		{transcriptBlockCase{"Bash", "command", "cargo clippy"}, ClassLint},
 	}
 
 	for _, c := range cases {
@@ -127,7 +156,8 @@ func TestIdentify(t *testing.T) {
 		// A tool that means one thing is its own group, and its own leaf.
 		{transcriptBlockCase{"Read", "file_path", "/tmp/a"}, ToolID{ClassFileRead, "Read", "Read"}},
 		{transcriptBlockCase{"Edit", "file_path", "/tmp/a"}, ToolID{ClassFileWrite, "Edit", "Edit"}},
-		{transcriptBlockCase{"EnterWorktree", "branch", "x"}, ToolID{ClassOther, "EnterWorktree", "EnterWorktree"}},
+		{transcriptBlockCase{"EnterWorktree", "branch", "x"}, ToolID{ClassAgent, "EnterWorktree", "EnterWorktree"}},
+		{transcriptBlockCase{"Skill", "skill", "daily-wrap"}, ToolID{ClassOther, "Skill", "Skill"}},
 
 		// An MCP call is grouped by the server it went to, and named by the method it called.
 		{
@@ -151,6 +181,15 @@ func TestIdentify(t *testing.T) {
 		{transcriptBlockCase{"Bash", "command", "gh run watch"}, ToolID{ClassGit, "Bash (git)", "gh run"}},
 		{transcriptBlockCase{"Bash", "command", "cargo test -p app"}, ToolID{ClassTest, "Bash (test)", "cargo test"}},
 		{transcriptBlockCase{"Bash", "command", "go build ./..."}, ToolID{ClassBuild, "Bash (build)", "go build"}},
+		{
+			transcriptBlockCase{"Bash", "command", "cargo clippy --all-targets -- -D warnings"},
+			ToolID{ClassLint, "Bash (lint)", "cargo clippy"},
+		},
+		{transcriptBlockCase{"Bash", "command", "go vet ./..."}, ToolID{ClassLint, "Bash (lint)", "go vet"}},
+		{
+			transcriptBlockCase{"Bash", "command", "npx prettier --check ."},
+			ToolID{ClassLint, "Bash (lint)", "npx prettier"},
+		},
 		{transcriptBlockCase{"Bash", "command", "pnpm check -q go"}, ToolID{ClassChecker, "Bash (checker)", "pnpm check"}},
 		// A runner's `run` is punctuation, so the leaf names what it was asked to run.
 		{transcriptBlockCase{"Bash", "command", "npm run check"}, ToolID{ClassChecker, "Bash (checker)", "npm check"}},

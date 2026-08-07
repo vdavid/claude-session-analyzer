@@ -62,7 +62,7 @@ Tool breakdown can't use kind colours: it counts calls by what they were, not st
 doing. So it has a second set, same file, and the page never puts the two in one chart. Each sits in its own section
 behind its own legend, chrome between them stays neutral, so neither reads as the other.
 
-Engine reports 15 tool classes, more than any palette keeps apart, so `classes.ts` maps them onto **seven families** and
+Engine reports 16 tool classes, more than any palette keeps apart, so `classes.ts` maps them onto **seven families** and
 the chart colours by family. Not a rollup for its own sake: because the pie draws families in fixed order, each family
 is one contiguous arc and the chart says "37% of this session's calls were file work" before a reader touches the
 legend. Groups inside a family share its colour, told apart by the 2px surface ring between them, by the table beside

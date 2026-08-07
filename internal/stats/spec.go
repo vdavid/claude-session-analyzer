@@ -42,7 +42,7 @@ var laneDims = map[Dim]bool{DimLane: true, DimAgent: true}
 // them. The engine exports no list, so this one is a copy; TestTheClassListMatchesTheEngines reads that file and fails
 // with the name to add here when a class is added there.
 var classes = []string{
-	"checker", "build", "test", "dev server", "wait", "git", "search", "file read", "file write",
+	"checker", "build", "lint", "test", "dev server", "wait", "git", "search", "file read", "file write",
 	"agent", "ask", "mcp", "web", "shell", "other",
 }
 
