@@ -75,12 +75,12 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
     "session": { "…": "the object above" },
     "totals": {
         "from": "2026-08-03T08:42:19.17Z",
-        "until": "2026-08-06T10:11:03.289Z",
-        "wallClockSeconds": 264524.119,
-        "laneTimeSeconds": 405702.456,
-        "activeSeconds": 118430.204,
-        "rows": 15944,
-        "lanes": 28,
+        "until": "2026-08-06T13:35:31.642Z",
+        "wallClockSeconds": 276792.472,
+        "laneTimeSeconds": 428756.432,
+        "activeSeconds": 138018.558,
+        "rows": 17673,
+        "lanes": 32,
         "byKind": [{ "kind": "thinking", "seconds": 29450.346, "rows": 2300 }],
         "byTool": [
             {
@@ -155,7 +155,7 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
 ### The three numbers that aren't the same
 
 `wallClockSeconds` is how long the session took. `laneTimeSeconds` is every lane's rows added up, which is larger
-whenever lanes ran at the same time: 405,702 s against 264,524 s on the reference session. They answer different
+whenever lanes ran at the same time: 428,756 s against 276,792 s on the reference session. They answer different
 questions, and presenting one as the other is the mistake this API is shaped to prevent. A pie of `byKind` is a
 breakdown of **lane time**, so say so in the legend.
 

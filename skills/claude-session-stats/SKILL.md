@@ -30,7 +30,7 @@ and a corpus query is about 0.25 s. Single-session questions need no warm.
 Say which one you're quoting.
 
 - **wall clock**: how long the session took.
-- **lane time**: every agent's clock added up. Bigger whenever agents ran at once (405,702 s against 264,524 s wall
+- **lane time**: every agent's clock added up. Bigger whenever agents ran at once (428,756 s against 276,792 s wall
   clock on one real session). A breakdown by activity is a breakdown of lane time.
 - **active**: lane time minus every gap (waiting on a person, a teammate, a background task, plus stalls and API
   errors). This is "net time the agents spent building it".

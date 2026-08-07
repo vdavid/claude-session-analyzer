@@ -36,7 +36,7 @@ Both the `--group-by` values and the `--where` fields:
 Every answer carries all three, because presenting one as another is the mistake this tool exists to prevent.
 
 - **`wallClockSeconds`**: how long the sessions took. Summed across sessions in corpus scope.
-- **`laneTimeSeconds`**: every lane's rows added up. Larger whenever lanes ran at once: 405,702 s against 264,524 s on
+- **`laneTimeSeconds`**: every lane's rows added up. Larger whenever lanes ran at once: 428,756 s against 276,792 s on
   the reference session.
 - **`activeSeconds`**: lane time minus every gap kind (`Kind.IsGap()`), so waiting, stalls, and API errors come out.
   This is "net time the agents spent building it".

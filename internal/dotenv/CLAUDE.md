@@ -1,19 +1,17 @@
 # dotenv/: the committed `.env` reader
 
-Reads the repo's `.env`, which holds the two dev ports. A dozen lines rather than a dependency, because `KEY=value` with
-comments and optional quotes is all it has to understand.
+Reads repo's `.env`, which holds two dev ports. A dozen lines rather than a dependency: `KEY=value` with comments and
+optional quotes is all it must understand.
 
 ## Must-knows
 
-- **The process environment wins over the file.** A `.env` is a default someone can override for one run, not something
-  that overrides them.
-- **It walks up from the directory it's given**, which is what lets the binary run from anywhere inside the repo and
-  still find the ports.
-- **A missing file is not an error.** `Load` returns an empty `Env`, and every lookup falls through to the caller's
-  fallback. `internal/cli/serve.go` holds those fallbacks, and they're the same numbers `.env` carries.
-- Nothing secret goes in here. The file is committed so a fresh clone runs, and anything that shouldn't be in git needs
-  a different home.
+- **Process environment wins over file.** `.env` is a default someone can override for one run, not something that
+  overrides them.
+- **Walks up from directory it's given**, so the binary runs from anywhere inside the repo and still finds ports.
+- **Missing file is not an error.** `Load` returns empty `Env`, every lookup falls through to caller's fallback.
+  `internal/cli/serve.go` holds those fallbacks, same numbers `.env` carries.
+- Nothing secret here. File is committed so a fresh clone runs; anything that shouldn't be in git needs another home.
 
 ## Module map
 
-- `dotenv.go`: `FileName`, `Load`, `Env.Get`, and the parser. That's the package.
+- `dotenv.go`: `FileName`, `Load`, `Env.Get`, parser. Whole package.
