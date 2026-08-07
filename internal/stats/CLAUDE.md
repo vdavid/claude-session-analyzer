@@ -24,6 +24,9 @@ Filter, group, add up. Every question an agent or a person asks about where the 
   lanes each are six. Cells that have already been summed past the lane dimension carry a count instead of a name, and
   the largest count seen is all that evidence supports, which makes the number a lower bound when two tool groups were
   used by different lanes.
+- **`Measures.Sessions` is a distinct count, so it doesn't sum either.** A session contributing to two groups counts
+  once in each, and a group's count is never the sum of a finer roll-up's. `Matched.Sessions` over `Totals.Sessions` is
+  "codegraph used in 12 of 735 sessions". `TestASessionCountIsDistinctRatherThanSummableAcrossGroups` holds it.
 - **Say so rather than answering something narrower.** A query naming `lane` or `agent` against cells summed without
   them leaves a `Result.Notes` entry pointing at the per-lane detail. `Spec.NeedsLanes()` is how a caller knows to load
   it before asking.

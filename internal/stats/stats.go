@@ -92,7 +92,11 @@ type Measures struct {
 	Calls int `json:"calls"`
 	// Lanes is how many lanes contributed, counted per session and added up across them, because a lane belongs to one
 	// session.
-	Lanes    int `json:"lanes"`
+	Lanes int `json:"lanes"`
+	// Sessions is how many sessions contributed, counted distinctly. Like Lanes it doesn't add up: a session that shows
+	// up in two groups counts once in each and once in the match, so a group's count is never the sum of a finer
+	// roll-up's. Against Totals.Sessions it answers "codegraph was used in 12 of 735 sessions".
+	Sessions int `json:"sessions"`
 	Errors   int `json:"errors"`
 	TimedOut int `json:"timedOut"`
 }
@@ -310,6 +314,9 @@ type acc struct {
 	// instead, and the largest count seen is the best that evidence supports.
 	lanes   map[string]map[string]bool
 	counted map[string]int
+	// sessions is the distinct set that contributed, keyed the same way, so a session showing up in two groups counts
+	// once in each rather than twice in either.
+	sessions map[string]bool
 }
 
 func (a *acc) add(cell agg.Cell, session string) {
@@ -318,6 +325,11 @@ func (a *acc) add(cell agg.Cell, session string) {
 	a.calls += cell.Calls
 	a.errors += cell.Errors
 	a.timedOut += cell.TimedOut
+
+	if a.sessions == nil {
+		a.sessions = map[string]bool{}
+	}
+	a.sessions[session] = true
 
 	switch {
 	case cell.Lane != "":
@@ -355,6 +367,7 @@ func (a *acc) measures() Measures {
 		Rows:     a.rows,
 		Calls:    a.calls,
 		Lanes:    lanes,
+		Sessions: len(a.sessions),
 		Errors:   a.errors,
 		TimedOut: a.timedOut,
 	}

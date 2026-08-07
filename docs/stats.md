@@ -46,6 +46,18 @@ Every answer carries all three, because presenting one as another is the mistake
 
 `matched` carries `shareOfLaneTime`, `shareOfActive`, and `shareOfWallClock` against those.
 
+## Measures
+
+`matched` and every group carry the same set: `seconds`, `rows`, `calls`, `lanes`, `sessions`, `errors`, `timedOut`.
+
+- `calls` counts tool runs, one per call rather than two. See the trap below.
+- **`lanes` and `sessions` don't sum.** Distinct counts, not totals. A session contributing to two groups counts once in
+  each, so a group's `sessions` is never the sum of a finer roll-up's. `lanes` counted per session, added across them,
+  because a lane belongs to one session.
+- `matched.sessions` over `totals.sessions` answers "codegraph used in 12 of 735 sessions".
+- CLI table shows a `Sessions` column whenever it can differ per row: not with `--group-by session` (1 everywhere), not
+  for one session in scope.
+
 ## The trap: two rows per call
 
 Every tool call leaves two rows, the agent composing it and the tool running, and **both carry the tool's name**. A
@@ -71,6 +83,12 @@ Whether the agents reached for codegraph or for grep, over a year:
 
 ```sh
 claude-session-analyzer stats --since 2026-01-01 --where class=search,mcp --group-by group --top 15
+```
+
+Wait-loop time per project, and how many sessions each covers:
+
+```sh
+claude-session-analyzer stats --where class=wait --group-by project --top 8
 ```
 
 Net time building one session, excluding waiting on a person or a teammate: `totals.activeSeconds`, or the full split:

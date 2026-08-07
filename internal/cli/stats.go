@@ -169,23 +169,35 @@ func writeStatsTable(a *app, result stats.Result, walk cache.CorpusResult, spec 
 		coveringDays(result.Scope), plural(result.Totals.Sessions, "session"), count(walk.Hits), count(walk.Parsed))
 
 	if len(result.Groups) > 0 {
+		// Calls and sessions answer different questions, how often and how widely, and both are narrow enough to keep.
+		// The session count only earns its column where it can differ between rows: grouping by session puts a 1 on
+		// every one, and a single session in scope does the same.
+		sessions := countsSessions(result, spec)
+
 		tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-		headers := make([]string, 0, len(spec.GroupBy)+3)
+		headers := make([]string, 0, len(spec.GroupBy)+4)
 		for _, dim := range spec.GroupBy {
 			headers = append(headers, strings.ToUpper(string(dim)[:1])+string(dim)[1:])
 		}
+		headers = append(headers, "Time", "Calls")
+		if sessions {
+			headers = append(headers, "Sessions")
+		}
 		// The share is against lane time, because that's the denominator the groups partition: an unfiltered query's
 		// column adds to 100%. Against active time a waiting group would read as 94% of a total it isn't part of.
-		fmt.Fprintln(tw, strings.Join(append(headers, "Time", "Calls", "Share of lane time"), "\t"))
+		fmt.Fprintln(tw, strings.Join(append(headers, "Share of lane time"), "\t"))
 		for _, g := range result.Groups {
-			cells := make([]string, 0, len(spec.GroupBy)+3)
+			cells := make([]string, 0, len(headers)+1)
 			for _, dim := range spec.GroupBy {
 				cells = append(cells, clip(g.Key.Value(dim), titleWidth))
 			}
 			cells = append(cells,
 				timeline.FormatDuration(asDuration(g.Seconds)),
-				count(g.Calls),
-				percent(g.ShareOfLaneTime))
+				count(g.Calls))
+			if sessions {
+				cells = append(cells, count(g.Sessions))
+			}
+			cells = append(cells, percent(g.ShareOfLaneTime))
 			fmt.Fprintln(tw, strings.Join(cells, "\t"))
 		}
 		if err := tw.Flush(); err != nil {
@@ -199,8 +211,12 @@ func writeStatsTable(a *app, result stats.Result, walk cache.CorpusResult, spec 
 	// Three denominators, named. The JSON carries a share against each; the table leads with lane time and spells the
 	// other two out, because "active" excluding the waiting is exactly the thing a reader has to know before dividing.
 	m := result.Matched
-	fmt.Fprintf(a.out, "\nMatched %s over %s, which is %s of lane time.\n",
-		timeline.FormatDuration(asDuration(m.Seconds)), plural(m.Calls, "call"), percent(m.ShareOfLaneTime))
+	in := ""
+	if result.Totals.Sessions > 1 {
+		in = fmt.Sprintf(" in %s of %s", count(m.Sessions), plural(result.Totals.Sessions, "session"))
+	}
+	fmt.Fprintf(a.out, "\nMatched %s over %s%s, which is %s of lane time.\n",
+		timeline.FormatDuration(asDuration(m.Seconds)), plural(m.Calls, "call"), in, percent(m.ShareOfLaneTime))
 	fmt.Fprintf(a.out, "Out of %s lane time (every agent's clock added up), %s active (waiting, stalls, and API "+
 		"errors taken out), %s wall clock.\n",
 		timeline.FormatDuration(asDuration(result.Totals.LaneTimeSeconds)),
@@ -211,6 +227,20 @@ func writeStatsTable(a *app, result stats.Result, walk cache.CorpusResult, spec 
 		fmt.Fprintf(a.out, "\n%s\n", note)
 	}
 	return nil
+}
+
+// countsSessions says a per-group session count would tell a reader something it doesn't already know. Grouping by
+// session puts a 1 on every row, and a query narrowed to one session can't do better than that either.
+func countsSessions(result stats.Result, spec stats.Spec) bool {
+	if result.Totals.Sessions <= 1 {
+		return false
+	}
+	for _, dim := range spec.GroupBy {
+		if dim == stats.DimSession {
+			return false
+		}
+	}
+	return true
 }
 
 func writeVocabulary(a *app, asJSON bool) error {

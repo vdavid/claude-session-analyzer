@@ -68,6 +68,30 @@ func TestStatsCountsAToolCallOnceRatherThanTwice(t *testing.T) {
 	}
 }
 
+// A corpus answer says how many sessions each group covers, which is the number "codegraph in 12 of 735 sessions"
+// needs. Grouping by session leaves the column out, because there it's 1 on every row.
+func TestStatsTableCountsSessionsPerGroupExceptWhenGroupingBySession(t *testing.T) {
+	isolate(t)
+	code, stdout, stderr := run(t, "stats", "--root", sessionRoot(), "--group-by", "project")
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "Sessions") {
+		t.Errorf("wanted a Sessions column:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Calls") {
+		t.Errorf("the Calls column has to stay:\n%s", stdout)
+	}
+
+	code, bySession, stderr := run(t, "stats", "--root", sessionRoot(), "--group-by", "session")
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, stderr)
+	}
+	if strings.Contains(bySession, "Sessions") {
+		t.Errorf("a per-session answer counts 1 session on every row, so the column adds nothing:\n%s", bySession)
+	}
+}
+
 func TestStatsRefusesADimensionItDoesntHaveAndNamesTheOnesItDoes(t *testing.T) {
 	isolate(t)
 	code, _, stderr := run(t, "stats", "--root", goldenRoot(), "--group-by", "nonsense")

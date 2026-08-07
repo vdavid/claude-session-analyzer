@@ -417,6 +417,77 @@ func TestLanesAreCountedPerSessionSoTwoSessionsAddUp(t *testing.T) {
 	}
 }
 
+// "How many of my sessions reached for codegraph, out of how many?" The denominator is Totals.Sessions, and the
+// numerator is a distinct count, so a session that used a tool twice still counts once.
+func TestSessionsAreCountedDistinctlyForTheMatchAndForEachGroup(t *testing.T) {
+	result := run(t, stats.Spec{
+		Where:   []stats.Clause{where(stats.DimGroup, "codegraph*")},
+		GroupBy: []stats.Dim{stats.DimGroup},
+	}, corpus())
+
+	if got, want := result.Matched.Sessions, 2; got != want {
+		t.Errorf("sessions matched = %d, want %d: both sessions called codegraph", got, want)
+	}
+	if got, want := result.Totals.Sessions, 2; got != want {
+		t.Errorf("sessions in scope = %d, want %d", got, want)
+	}
+	codegraph := group(t, result, stats.DimGroup, "codegraph (MCP)")
+	if got, want := codegraph.Sessions, 2; got != want {
+		t.Errorf("codegraph sessions = %d, want %d", got, want)
+	}
+
+	// The grain the cells were summed at can't change a session count, because the session isn't on the cell.
+	digests := run(t, stats.Spec{
+		Where:   []stats.Clause{where(stats.DimGroup, "codegraph*")},
+		GroupBy: []stats.Dim{stats.DimGroup},
+	}, []stats.Source{withoutLanes(sessionOne()), withoutLanes(sessionTwo())})
+	if got, want := digests.Matched.Sessions, 2; got != want {
+		t.Errorf("sessions from digests = %d, want %d", got, want)
+	}
+}
+
+// A session count is never a sum. One session using two tools counts in both groups, so adding the groups up
+// overshoots the match, exactly the way a lane count does.
+func TestASessionCountIsDistinctRatherThanSummableAcrossGroups(t *testing.T) {
+	result := run(t, stats.Spec{
+		Where:   []stats.Clause{where(stats.DimGroup, "codegraph*", "Grep")},
+		GroupBy: []stats.Dim{stats.DimGroup},
+	}, corpus())
+
+	codegraph := group(t, result, stats.DimGroup, "codegraph (MCP)")
+	if got, want := codegraph.Sessions, 2; got != want {
+		t.Errorf("codegraph sessions = %d, want %d: one call in each session", got, want)
+	}
+	grep := group(t, result, stats.DimGroup, "Grep")
+	if got, want := grep.Sessions, 1; got != want {
+		t.Errorf("grep sessions = %d, want %d: only the first session used it", got, want)
+	}
+
+	var summed int
+	for _, g := range result.Groups {
+		summed += g.Sessions
+	}
+	if got, want := summed, 3; got != want {
+		t.Fatalf("groups summed = %d, want %d", got, want)
+	}
+	if got, want := result.Matched.Sessions, 2; got != want {
+		t.Errorf("sessions matched = %d, want %d: the same session in two groups counts once here", got, want)
+	}
+}
+
+func TestGroupingBySessionCountsOneSessionPerGroup(t *testing.T) {
+	result := run(t, stats.Spec{GroupBy: []stats.Dim{stats.DimSession}}, corpus())
+
+	if len(result.Groups) != 2 {
+		t.Fatalf("wanted a group per session, got %+v", result.Groups)
+	}
+	for _, g := range result.Groups {
+		if got, want := g.Sessions, 1; got != want {
+			t.Errorf("session %q counted %d sessions, want %d", g.Session, got, want)
+		}
+	}
+}
+
 func TestGroupingBySeveralDimensionsKeepsOnlyThoseKeys(t *testing.T) {
 	result := run(t, stats.Spec{
 		Where:   []stats.Clause{where(stats.DimClass, "mcp")},
