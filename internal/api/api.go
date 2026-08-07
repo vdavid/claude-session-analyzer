@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/vdavid/claude-session-analyzer/internal/report"
 	"github.com/vdavid/claude-session-analyzer/internal/session"
 	"github.com/vdavid/claude-session-analyzer/internal/timeline"
 	"github.com/vdavid/claude-session-analyzer/internal/transcript"
@@ -90,7 +91,7 @@ func (s *server) listSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body := sessionListBody{Root: s.opts.Root, Sessions: []sessionBody{}}
+	body := report.SessionList{Root: s.opts.Root, Sessions: []report.Session{}}
 	for _, sum := range sums {
 		body.Totals.Sessions++
 		body.Totals.Subagents += sum.Subagents
@@ -102,7 +103,7 @@ func (s *server) listSessions(w http.ResponseWriter, r *http.Request) {
 		shown = shown[:limit]
 	}
 	for _, sum := range shown {
-		body.Sessions = append(body.Sessions, toSession(sum))
+		body.Sessions = append(body.Sessions, report.ForSession(sum))
 	}
 	writeJSON(w, http.StatusOK, body)
 }
@@ -120,7 +121,7 @@ func (s *server) oneSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, oneSessionBody{Session: toSession(sum)})
+	writeJSON(w, http.StatusOK, oneSessionBody{Session: report.ForSession(sum)})
 }
 
 func (s *server) timeline(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +149,7 @@ func (s *server) timeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tl := timeline.Derive(parsed, timeline.Options{})
-	writeJSON(w, http.StatusOK, buildTimeline(sum, tl, wantsRows(r)))
+	writeJSON(w, http.StatusOK, report.ForTimeline(sum, tl, wantsRows(r)))
 }
 
 // resolve turns the `{id}` in the path into a location, answering for itself when it can't. An id that matches nothing

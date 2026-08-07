@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vdavid/claude-session-analyzer/internal/report"
 	"github.com/vdavid/claude-session-analyzer/internal/session"
 	"github.com/vdavid/claude-session-analyzer/internal/timeline"
 )
@@ -56,7 +57,7 @@ func TestSessionsAnswersWithTheNewestFirst(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
 	}
-	got := decode[sessionListBody](t, rec)
+	got := decode[report.SessionList](t, rec)
 
 	if len(got.Sessions) != 4 {
 		t.Fatalf("returned %d sessions, want the 4 in testdata", len(got.Sessions))
@@ -68,7 +69,7 @@ func TestSessionsAnswersWithTheNewestFirst(t *testing.T) {
 		t.Errorf("totals = %+v, want 4 sessions and the 4 subagents alpha spawned", got.Totals)
 	}
 
-	var alpha sessionBody
+	var alpha report.Session
 	for _, s := range got.Sessions {
 		if s.ID == alphaID {
 			alpha = s
@@ -94,7 +95,7 @@ func TestSessionsAnswersWithTheNewestFirst(t *testing.T) {
 func TestSessionsHonoursALimitAndStillTotalsEverything(t *testing.T) {
 	rec := get(t, sessionRoot(), "/api/sessions?limit=2")
 
-	got := decode[sessionListBody](t, rec)
+	got := decode[report.SessionList](t, rec)
 	if len(got.Sessions) != 2 {
 		t.Errorf("returned %d sessions, want 2", len(got.Sessions))
 	}
@@ -132,7 +133,7 @@ func TestOneSessionResolvesFromAPrefix(t *testing.T) {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
 	}
 	got := decode[struct {
-		Session sessionBody `json:"session"`
+		Session report.Session `json:"session"`
 	}](t, rec)
 	if got.Session.ID != alphaID {
 		t.Errorf("id = %q, want the full id a prefix resolved to", got.Session.ID)
@@ -175,7 +176,7 @@ func TestTimelineReturnsRowsAndTheAggregatesAFrontendWouldOtherwiseSum(t *testin
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
 	}
-	got := decode[timelineBody](t, rec)
+	got := decode[report.Timeline](t, rec)
 
 	if got.Session.ID != goldenID {
 		t.Errorf("session id = %q", got.Session.ID)
@@ -276,7 +277,7 @@ func TestTimelineCountsToolsByGroupAndByLeaf(t *testing.T) {
 		},
 	}
 
-	got := buildTimeline(session.Summary{ID: "s"}, tl, false)
+	got := report.ForTimeline(session.Summary{ID: "s"}, tl, false)
 
 	if len(got.Totals.ByTool) != 2 {
 		t.Fatalf("groups = %+v, want codegraph and Read", got.Totals.ByTool)
@@ -321,7 +322,7 @@ func TestTimelineCountsToolsByGroupAndByLeaf(t *testing.T) {
 // TestTimelineToolTotalsAgreeWithTheRows holds the breakdown to the rows it's made of, on the derivation's own golden
 // fixture rather than on a hand-made timeline.
 func TestTimelineToolTotalsAgreeWithTheRows(t *testing.T) {
-	got := decode[timelineBody](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
+	got := decode[report.Timeline](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
 
 	if len(got.Totals.ByTool) == 0 {
 		t.Fatal("the fixture makes tool calls, so the breakdown shouldn't be empty")
@@ -377,7 +378,7 @@ func TestTimelineToolTotalsAgreeWithTheRows(t *testing.T) {
 // TestTimelineGapsAreTheStretchesALaneProducedNothing keeps the swimlane's holes honest: every gap has to be a row of
 // the same lane that the derivation called idle.
 func TestTimelineGapsAreTheStretchesALaneProducedNothing(t *testing.T) {
-	got := decode[timelineBody](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
+	got := decode[report.Timeline](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
 
 	gaps := 0
 	for _, lane := range got.Lanes {
@@ -404,8 +405,8 @@ func TestTimelineGapsAreTheStretchesALaneProducedNothing(t *testing.T) {
 
 // TestTimelineCanLeaveTheRowsOut is what a session with 983 lanes needs: the pie and the swimlane without the sheet.
 func TestTimelineCanLeaveTheRowsOut(t *testing.T) {
-	full := decode[timelineBody](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
-	light := decode[timelineBody](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline?rows=false"))
+	full := decode[report.Timeline](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline"))
+	light := decode[report.Timeline](t, get(t, goldenRoot(), "/api/sessions/"+goldenID+"/timeline?rows=false"))
 
 	if len(light.Rows) != 0 {
 		t.Errorf("returned %d rows, want none", len(light.Rows))
@@ -512,7 +513,7 @@ func TestATimelineWithNoTimestampsAnswersNullRatherThanYearOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := decode[timelineBody](t, get(t, root, "/api/sessions/"+id+"/timeline"))
+	got := decode[report.Timeline](t, get(t, root, "/api/sessions/"+id+"/timeline"))
 
 	if got.Totals.From != nil {
 		t.Errorf("totals.from = %v, want null on a session with no timestamped record", got.Totals.From)
