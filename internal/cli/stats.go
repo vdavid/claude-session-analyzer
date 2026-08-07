@@ -63,7 +63,7 @@ func runStats(a *app, args []string) error {
 		if err != nil {
 			return err
 		}
-		if !only.any() {
+		if only.narrowed() {
 			return usagef("`--since`, `--until`, and `--project` narrow the corpus, and this already named one session.")
 		}
 		keep = func(sum session.Summary) bool { return sum.ID == loc.ID }

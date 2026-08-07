@@ -12,6 +12,9 @@ claude-session-analyzer stats [<session-id>] [flags]
 - No session id means corpus scope: every session, narrowed by `--since`, `--until`, `--project`.
 - `--where <field>=<value>[,<value>]`, repeatable. Comma is OR within a field, repeated flag is AND across fields.
   Matching is case-insensitive; a leading or trailing `*` globs.
+- **A value holding a comma needs `\,`**, since the comma is the separator. Two kind names have one, so
+  `kind=waiting\, reason unknown`. Usually `kind=waiting*` is what's wanted anyway: it covers all four waits.
+- Quote a glob in a shell that expands one: `--where 'group=codegraph*'`.
 - `--group-by <dim>[,<dim>]`. Order is the order the keys come back in.
 - `--top N` bounds the output, `--json` for the machine-readable answer, `--no-cache` to bypass `docs/cache.md`.
 - `--vocabulary` prints every valid dimension, kind, and class. An agent guessing between `checker` and `checker-script`
@@ -49,8 +52,12 @@ Every tool call leaves two rows, the agent composing it and the tool running, an
 filter on `class`, `group`, `leaf`, or `tool` that takes both reports the tool as costing roughly double, and the answer
 looks entirely reasonable.
 
-So a tool filter counts only the row the tool ran in (`agg.ToolRuns`). Consequence worth knowing: a query filtering on a
-tool dimension and grouping by `kind` reports `tool execution` and `stalled`, never `tool call`. That's correct.
+So a tool question counts only the row the tool ran in (`agg.ToolRuns`). It fires on `--group-by` as well as `--where`:
+grouping by `group` with no filter would otherwise fold each composing row into the same key and inflate it.
+`Spec.IncludeComposingRows` opts out, and every answer carries a note saying which way it went.
+
+Consequence worth knowing: a tool question grouped by `kind` reports `tool execution` and `stalled`, never `tool call`.
+That's correct.
 
 ## Worked examples
 

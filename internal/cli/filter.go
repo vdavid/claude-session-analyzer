@@ -48,8 +48,9 @@ func (s *scope) filter() (func(session.Summary) bool, error) {
 	}, nil
 }
 
-// any says the scope lets everything through, which is what makes a corpus-wide command worth warning about.
-func (s *scope) any() bool { return s.since == "" && s.until == "" && s.project == "" }
+// narrowed says at least one of the three flags was given, so the command is working on part of the corpus rather than
+// all of it.
+func (s *scope) narrowed() bool { return s.since != "" || s.until != "" || s.project != "" }
 
 // startedAt is when a session began, falling back to the transcript's mtime for one whose records carry no timestamp.
 // That's the same fallback the listing sorts by, so a filter and a sort agree about where a session sits in time.

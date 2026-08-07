@@ -64,7 +64,9 @@ claude-session-analyzer stats [<session-id>] \
   --top 20 --json
 ```
 
-- Comma is OR inside a field, repeated `--where` is AND across fields. Case-insensitive, `*` globs.
+- Comma is OR inside a field, repeated `--where` is AND across fields. Case-insensitive, `*` globs. Quote globs so the
+  shell doesn't eat them: `--where 'group=codegraph*'`.
+- All waiting at once: `--where kind=waiting*`. A value with a comma in it needs `\,`.
 - No session id means every session; narrow with `--since`, `--until`, `--project`.
 - Dimensions: `kind`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, `project`.
 - `--vocabulary` lists every valid value. Read it rather than guessing between `checker` and `checker-script`.
