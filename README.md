@@ -74,11 +74,17 @@ claude-session-analyzer stats --since 2026-01-01 --where class=search,mcp --grou
 
 # Which agents used a given tool?
 claude-session-analyzer stats --where 'group=codegraph*' --group-by agent
+
+# How much of a tool's time was the tool, and how much was the agent writing the call?
+claude-session-analyzer stats 532ac591 --group-by group --top 8
 ```
 
 Dimensions are `kind`, `class`, `group`, `leaf`, `tool`, `day`, `lane`, `agent`, `session`, and `project`, for both
-`--group-by` and `--where`. `--vocabulary` prints every valid value. `--json` gives the machine-readable answer, and
-every answer carries all three denominators, because elapsed time, agent time, and working time are different numbers.
+`--group-by` and `--where`. `--vocabulary` prints every valid value. `--json` gives the machine-readable answer.
+
+Every answer carries four denominators, because how long a session took, how much agent time it cost, how much of that
+was actually producing, and every agent's clock added together are four different numbers. The last three are printed as
+a ladder, each one the rung above minus something, so it's clear what a percentage divided by.
 
 Warming keeps a summary of each session under `~/.cache/claude-session-analyzer/` (33 MB against 3.8 GB of transcripts),
 so a query across everything takes about a quarter of a second. `cache info` says what's stored and `cache clear`

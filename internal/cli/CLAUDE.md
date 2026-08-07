@@ -16,9 +16,14 @@ a judgement call belongs in `internal/timeline`, `internal/agg`, or `internal/st
   leaves rows out unless `--rows` asks. An 8 MB answer is a context-window incident, and these defaults are the guard.
 - **`--json` answers with `internal/report` shapes**, the same ones the HTTP API returns. One vocabulary across both
   surfaces. `stats` is the exception: it has its own shape, `internal/stats`, documented in `docs/stats.md`.
-- **A `stats` table shares against lane time, not active time.** Groups partition lane time, so an unfiltered column
-  adds to 100%. Against active time a waiting group reads as 94% of a total it isn't part of. The JSON carries all three
-  shares; the table names its denominator.
+- **A `stats` table shares against lane time, not net or active.** Groups partition lane time, so an unfiltered column
+  adds to 100%. Against active time a waiting group reads as 94% of a total it isn't part of. The JSON carries every
+  share; the table names its denominator in the header, numerator included on a tool question (`Running / lane time`).
+- **`stats` leads its summary with net and prints the ladder as a list**, one rung per line with the subtraction written
+  beside it. Three durations in one sentence is how a reader ends up quoting the wrong one. Definition: `docs/api.md`.
+- **The table's columns follow `Result.ToolClocksApart`.** On a tool question the time column is `Running`, with
+  `Composing` and `Stalled` beside it where either holds something. Anywhere else those two are subsets of the time
+  column, so showing them would print the same number twice. A zero cell is a dash, not `0.0s`.
 - **Messages are sentences with a next step in them**, and they never say "error" or "failed". `resolve.go` holds the
   two that matter: an unknown id and an ambiguous one.
 - **`serve` binds `127.0.0.1` and only that.** Ports come from the committed `.env` (`internal/dotenv`), a flag beats

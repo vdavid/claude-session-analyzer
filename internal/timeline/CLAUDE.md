@@ -11,9 +11,11 @@ Where judgement lives, and where being wrong is invisible in output. Every rule 
 - **Cursor only moves forward.** Timestamps go backwards (write jitter, and a 132 s jump at compaction), so a record
   stamped before cursor gets a zero-length row, not a negative one.
 - **Group by `LaneID`, never by `Agent`.** 23 lanes in one session on this machine are all called `general-purpose`.
-- **Ask `Kind.IsWaiting()`, `Kind.IsGap()`, `Row.IsToolRun()`, don't list kinds.** A new kind added to a hand-written
-  list elsewhere is a bug nobody sees. `IsToolRun` is the one row per call holding the tool's own clock, whatever
-  verdict it got; its `tool call` sibling is the agent composing the call, and counting both reports every call twice.
+- **Ask `Kind.IsWaiting()`, `Kind.IsGap()`, `Kind.IsSomeoneElsesClock()`, `Row.IsToolRun()`, don't list kinds.** A new
+  kind added to a hand-written list elsewhere is a bug nobody sees. `IsToolRun` is the one row per call holding the
+  tool's own clock, whatever verdict it got; its `tool call` sibling is the agent composing the call, and counting both
+  reports every call twice. `IsSomeoneElsesClock` is the two waits net time takes out (a person's, a teammate's), and
+  the reason it's a predicate is in its doc comment.
 - **Every class a command can be read as has to be in `precedence`** (`tool.go`). One that isn't can never outrank the
   `ClassShell` a command starts out as, so it gets mapped and then never returned. `ClassWeb` sat outside it once.
 - **A wait ended by a task notification asks whose task it was.** A live other lane's task makes it
@@ -30,7 +32,7 @@ Where judgement lives, and where being wrong is invisible in output. Every rule 
 
 ## Module map
 
-- `derive.go`: the walk. `kind.go`: 11 kinds, two predicates. `options.go`: two spans bounding a heuristic.
+- `derive.go`: the walk. `kind.go`: 11 kinds, three predicates. `options.go`: two spans bounding a heuristic.
 - `wait.go` (what ended a gap, who was alive), `stall.go` (late results, timeouts), `apierror.go` (a refused request),
   `tool.go` (what a call was doing, two names `ToolID` gives it), `info.go` (the `Extra info` column), `csv.go` (CSV
   contract).

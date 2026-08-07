@@ -78,6 +78,7 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
         "until": "2026-08-06T13:35:31.642Z",
         "wallClockSeconds": 276792.472,
         "laneTimeSeconds": 428756.432,
+        "netSeconds": 162664.28,
         "activeSeconds": 138018.558,
         "rows": 17673,
         "lanes": 32,
@@ -88,6 +89,7 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
                 "class": "mcp",
                 "calls": 4,
                 "seconds": 3.427,
+                "composingSeconds": 6.963,
                 "lanes": 2,
                 "tools": [
                     {
@@ -95,6 +97,7 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
                         "leaf": "codegraph_explore",
                         "calls": 2,
                         "seconds": 1.492,
+                        "composingSeconds": 2.728,
                         "lanes": 1
                     }
                 ]
@@ -152,16 +155,38 @@ a session's 15,944 rows are a Go loop, not a JavaScript one.
 }
 ```
 
-### The three numbers that aren't the same
+### The ladder: lane time, net, active
 
-`wallClockSeconds` is how long the session took. `laneTimeSeconds` is every lane's rows added up, which is larger
-whenever lanes ran at the same time: 428,756 s against 276,792 s on the reference session. They answer different
-questions, and presenting one as the other is the mistake this API is shaped to prevent. A pie of `byKind` is a
-breakdown of **lane time**, so say so in the legend.
+Three durations over the same rows, each rung the one above minus something. Not three rivals: a reader picks the rung
+that answers their question, and the subtraction between them is what stops one being quoted as another. This section is
+the definition; everywhere else points here.
 
-`activeSeconds` is the third: lane time with every gap kind taken out (`Kind.IsGap()`, so the four waits, `stalled`, and
-`API error`). It's what the agents spent working rather than waiting, and it's a field because it's the number people
-ask for ("net time building this") and the one they'd otherwise compute from the pie and get wrong.
+Reference session `532ac591`, verified 2026-08-08:
+
+```
+lane time  119h05m  428,756.432 s  every lane's clock added up
+  net       45h11m  162,664.28 s   minus waiting for a person, minus waiting for a teammate
+  active    38h20m  138,018.558 s  minus stalls, API errors, background-task waits, unknown waits
+```
+
+- **`laneTimeSeconds`** is every lane's rows added up. Larger than wall clock whenever lanes ran at the same time. A pie
+  of `byKind` is a breakdown of **lane time**, so say so in the legend.
+- **`netSeconds`** is lane time minus the two waits whose clock belongs to somebody else (`Kind.IsSomeoneElsesClock()`):
+  **waiting for a person** and **waiting for a teammate**. It's the agent time the session actually cost. A wait on a
+  teammate is already counted as that teammate's own lane time, so keeping it counts the same work twice; a wait on a
+  person was never agent time. Everything else stays in, stalls and `API error` and background-task waits and
+  `compacting` included, because that clock is the lane's own.
+- **`activeSeconds`** is net minus the gaps net keeps: `stalled`, `API error`, `waiting for a background task`, and
+  `waiting, reason unknown`. Equivalently, lane time minus every `Kind.IsGap()`. It answers a different question from
+  net, "how much was producing" rather than "what did this cost", and neither replaces the other: net on the reference
+  session holds a 6h15m stalled `rm` that active doesn't.
+
+Both are fields rather than something a caller derives, because they're the numbers people ask for and the ones they'd
+otherwise compute from the pie and get wrong.
+
+`wallClockSeconds` isn't a rung. It's how long the session took, first record to last, whatever ran at once: 276,792 s
+against the ladder's 428,756 s at the top. Presenting it as lane time, or lane time as it, is the mistake this API is
+shaped to prevent.
 
 `totals.from` and `totals.until` bracket every lane, so they can sit slightly outside the session's own `start` and
 `end`, which are the lead's alone. On the reference session a subagent outlives the lead by 20 minutes. Both are `null`
@@ -181,8 +206,19 @@ first, each holding the exact tools inside it.
 - **`leaf` is the exact thing inside the group**: an MCP method, or the program a `Bash` call ran (`git commit`,
   `cargo test`, `pnpm check`). `tool` beside it is the raw name the harness used, for grepping a transcript.
 - **`calls` counts calls, not rows.** Every call leaves a `tool call` row for the agent composing it and one more row
-  for the tool running, and only the second is counted. `seconds` is those second rows added up, so it's the tool's own
-  wall clock including anything the tool waited on, and parallel calls each count their own the way lane time does.
+  for the tool running, and only the second is counted. A stalled call is still a call.
+- **A call's time is three numbers, because it went to three clocks and all three arrive under the group's name.**
+  `seconds` + `composingSeconds` + `stalledSeconds` accounts for every row the grouping rule put in the group, and one
+  number holding all three would report a tool as costing what the agent and a suspension cost. Numbers below from
+  `532ac591`, verified 2026-08-08.
+    - **`seconds`** is the tool running: its own wall clock, including anything the tool waited on. Parallel calls each
+      count their own, the way lane time does.
+    - **`composingSeconds`** is the agent writing the calls. It inverts per tool rather than rounding to nothing: the
+      `Edit` group is 2.24 h composing against 0.03 h running over 1,032 calls, because the model streams the whole diff
+      as the call's arguments, while `Bash (checker)` is 0.40 h composing against 7.86 h running over 344.
+    - **`stalledSeconds`** is calls that came back far too late to have been running (`docs/timeline-rules.md`), which
+      is a suspended agent rather than a slow tool. Left out when it's zero. `Bash (file write)` reads as pathological
+      at 6.36 h over 69 calls until this splits one stalled `rm` of 6.26 h off the other 68, which average 5.2 s.
 - **`lanes` is how many lanes made one of these calls.** It's counted per level rather than added up: one lane calling
   two of a server's methods is one lane for the server and one for each method, so a group's count is never the sum of
   its tools'.

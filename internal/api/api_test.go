@@ -200,6 +200,15 @@ func TestTimelineReturnsRowsAndTheAggregatesAFrontendWouldOtherwiseSum(t *testin
 		t.Errorf("lane time %v should exceed wall clock %v in a session with concurrent lanes",
 			got.Totals.LaneTimeSeconds, got.Totals.WallClockSeconds)
 	}
+	// The ladder is served in order, each rung the one above minus something. Its arithmetic belongs to
+	// `report.TestTheLadderHoldsFromLaneTimeDownToActive`; what the API owes a reader is the ordering.
+	if !(got.Totals.LaneTimeSeconds >= got.Totals.NetSeconds && got.Totals.NetSeconds >= got.Totals.ActiveSeconds) {
+		t.Errorf("the ladder isn't ordered: lane time %v, net %v, active %v",
+			got.Totals.LaneTimeSeconds, got.Totals.NetSeconds, got.Totals.ActiveSeconds)
+	}
+	if got.Totals.NetSeconds <= 0 {
+		t.Errorf("net = %v, want the fixture's agent time", got.Totals.NetSeconds)
+	}
 
 	// The pie has to add up to the rows it's made of.
 	var byKind, rows float64
@@ -329,17 +338,37 @@ func TestTimelineToolTotalsAgreeWithTheRows(t *testing.T) {
 	}
 
 	var calls int
-	var seconds float64
+	var ran, composing, stalled float64
 	for _, group := range got.Totals.ByTool {
 		var leafCalls int
+		var leafRan, leafComposing, leafStalled float64
 		for _, leaf := range group.Tools {
 			leafCalls += leaf.Calls
+			leafRan += leaf.Seconds
+			leafComposing += leaf.ComposingSeconds
+			leafStalled += leaf.StalledSeconds
 		}
 		if leafCalls != group.Calls {
 			t.Errorf("group %q says %d calls, its leaves add up to %d", group.Group, group.Calls, leafCalls)
 		}
+		// Each of the three clocks has to survive the roll-up from the leaves to the group, or a reader clicking into a
+		// group sees a different split than the one that got them there.
+		for _, c := range []struct {
+			what       string
+			group, sum float64
+		}{
+			{"seconds", group.Seconds, leafRan},
+			{"composingSeconds", group.ComposingSeconds, leafComposing},
+			{"stalledSeconds", group.StalledSeconds, leafStalled},
+		} {
+			if math.Abs(c.group-c.sum) > 0.01 {
+				t.Errorf("group %q says %v %s, its leaves add up to %v", group.Group, c.group, c.what, c.sum)
+			}
+		}
 		calls += group.Calls
-		seconds += group.Seconds
+		ran += group.Seconds
+		composing += group.ComposingSeconds
+		stalled += group.StalledSeconds
 	}
 
 	// A click on a slice filters the sheet by this, so every row that ran a tool has to name a group that exists.
@@ -349,7 +378,7 @@ func TestTimelineToolTotalsAgreeWithTheRows(t *testing.T) {
 	}
 
 	var wantCalls int
-	var wantSeconds float64
+	var wantRan, wantComposing, wantStalled float64
 	for _, r := range got.Rows {
 		if r.Kind == string(timeline.KindToolCall) {
 			wantCalls++
@@ -363,15 +392,31 @@ func TestTimelineToolTotalsAgreeWithTheRows(t *testing.T) {
 		if !groups[r.ToolGroup] {
 			t.Errorf("row %d is in group %q, which the breakdown doesn't list", r.Line, r.ToolGroup)
 		}
-		if r.Kind != string(timeline.KindToolCall) {
-			wantSeconds += r.Seconds
+		switch r.Kind {
+		case string(timeline.KindToolCall):
+			wantComposing += r.Seconds
+		case string(timeline.KindStalled):
+			wantStalled += r.Seconds
+		default:
+			wantRan += r.Seconds
 		}
 	}
 	if calls != wantCalls {
 		t.Errorf("the breakdown counts %d calls, the rows hold %d", calls, wantCalls)
 	}
-	if math.Abs(seconds-wantSeconds) > 0.01 {
-		t.Errorf("the breakdown adds up to %vs, the rows that ran a tool to %vs", seconds, wantSeconds)
+	// A call's time goes to one of three clocks and the breakdown reports all three, so between them they have to
+	// account for every row carrying a group's name. A clock going missing here is time the UI can't show anywhere.
+	for _, c := range []struct {
+		what            string
+		breakdown, rows float64
+	}{
+		{"seconds", ran, wantRan},
+		{"composingSeconds", composing, wantComposing},
+		{"stalledSeconds", stalled, wantStalled},
+	} {
+		if math.Abs(c.breakdown-c.rows) > 0.01 {
+			t.Errorf("the breakdown's %s adds up to %vs, the rows it's made of to %vs", c.what, c.breakdown, c.rows)
+		}
 	}
 }
 

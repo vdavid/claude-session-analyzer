@@ -179,17 +179,48 @@ func (c *Cube) Cells() []Cell {
 	return out
 }
 
+// A tool call spends its time on three clocks, and every one of them arrives on a cell carrying the group's name. Ask
+// the predicates below rather than testing the kind, and ask them before rolling the kind dimension away, because
+// that's where the evidence is.
+
+// IsComposing says the cell holds the agent's clock writing the call. It's most of what an `Edit` costs, because the
+// model streams the whole diff as the call's arguments.
+func (c Cell) IsComposing() bool { return c.IsAboutATool() && c.Kind == string(timeline.KindToolCall) }
+
+// IsStall says a stall verdict landed on the cell: the call came back far too late for what it was doing
+// (`timeline/stall.go`). The agent was suspended rather than working, so leaving this inside a tool's own clock makes
+// one suspension read as the tool being slow.
+func (c Cell) IsStall() bool { return c.IsAboutATool() && c.Kind == string(timeline.KindStalled) }
+
+// IsToolRun says the cell holds the stretch a call actually ran for, whatever verdict the derivation reached, the stall
+// included. That's why it's the one that counts calls.
+func (c Cell) IsToolRun() bool { return c.IsAboutATool() && !c.IsComposing() }
+
+// IsAboutATool says the cell carries a tool's name, whichever of the three clocks it holds. A question about tools has
+// nothing to ask of the rest, so it leaves them out entirely rather than folding them into a nameless group.
+func (c Cell) IsAboutATool() bool { return c.Group != "" }
+
 // ToolRuns keeps only the cells holding a tool's own clock, and it's what anything reporting on tools has to filter
 // through first.
 //
 // Every call leaves two rows: the agent composing it, and the tool running. Both carry the tool's name, so a total that
-// takes them all reports a tool as costing more than it did, and the difference is invisible in the output. Ask this
-// rather than testing the kind, and ask it before rolling the kind dimension away, because that's where the evidence
-// is.
-func ToolRuns(cells []Cell) []Cell {
+// takes them all reports a tool as costing more than it did, and the difference is invisible in the output. Stalls come
+// along, because a stall was a call and counting calls is what this is for; Stalls is how a caller takes their time out
+// again.
+func ToolRuns(cells []Cell) []Cell { return keep(cells, Cell.IsToolRun) }
+
+// Composing keeps only the cells holding the agent's own clock while it wrote a tool call, which is the complement of
+// ToolRuns over the cells carrying a group's name.
+func Composing(cells []Cell) []Cell { return keep(cells, Cell.IsComposing) }
+
+// Stalls keeps only the cells a stall verdict landed on. Their time is inside what ToolRuns returns, so a breakdown
+// reporting what a tool cost subtracts these and reports them beside it.
+func Stalls(cells []Cell) []Cell { return keep(cells, Cell.IsStall) }
+
+func keep(cells []Cell, wanted func(Cell) bool) []Cell {
 	out := make([]Cell, 0, len(cells))
 	for _, c := range cells {
-		if c.Group != "" && c.Kind != string(timeline.KindToolCall) {
+		if wanted(c) {
 			out = append(out, c)
 		}
 	}

@@ -41,7 +41,9 @@ no negative durations (verified 2026-08-06, `TestRealTimelineSweep`).
 - **compacting**: harness compacting the context.
 
 `Kind.IsWaiting()` is the four waits; `Kind.IsGap()` adds `stalled` and `API error`: everything where the lane produced
-nothing, what a swimlane draws as a hole. Ask those rather than listing kinds, so a new one can't be missed.
+nothing, what a swimlane draws as a hole. `Kind.IsSomeoneElsesClock()` is the two waits whose time belongs to somebody
+other than this lane's agent (a person's, a teammate's), which is the one thing net time subtracts from lane time:
+`docs/api.md`. Ask those rather than listing kinds, so a new one can't be missed.
 
 Two kinds the original plan didn't have. `compacting`, because compaction took 132 s in reference session and it's
 neither agent thinking nor tool running, so folding it into a wait would call two minutes of real work idleness. And

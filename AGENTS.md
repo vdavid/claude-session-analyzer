@@ -20,9 +20,10 @@ Personal tool, published because it's generic. Only transcripts are private. Dua
   version-sensitive, cost real effort to establish: extend it rather than rediscovering it.
 - **How a timeline is derived**: `docs/timeline-rules.md`. Every judgement call, with evidence. Read before changing a
   rule in `internal/timeline`, update it when you do.
-- **What the HTTP API answers**: `docs/api.md`. Contract the web app is built against, including the three totals a
-  reader could confuse. Read before changing a JSON shape in `internal/report`.
-- **What `stats` answers**: `docs/stats.md`. The query grammar, the dimensions, the two-rows-per-call trap.
+- **What the HTTP API answers**: `docs/api.md`. Contract the web app is built against, and single source for the ladder
+  of three durations a reader could quote as each other (lane time, net, active). Read before changing a JSON shape in
+  `internal/report`.
+- **What `stats` answers**: `docs/stats.md`. The query grammar, the dimensions, the three-clocks-per-call trap.
 - **What's cached and how it goes stale**: `docs/cache.md`. Read before changing a stored shape or the key.
 - **What the web app shows and why**: `docs/frontend.md`. Two pages, design system, decisions behind both. Editing
   must-knows in `web/CLAUDE.md` and colocated files under it.
@@ -49,8 +50,8 @@ Personal tool, published because it's generic. Only transcripts are private. Dua
   classification and naming (`Identify`), stall and timeout detection, waiting attribution. Rules in
   `docs/timeline-rules.md`.
 - `internal/agg/`: one cube every total rolls up from. Sums a timeline once by lane, agent, kind, class, group, leaf,
-  tool, and local day; `RollUp` keeps whichever dimensions a caller asks for. `ToolRuns` is the rule that a tool's own
-  clock excludes the row where the agent composed the call.
+  tool, and local day; `RollUp` keeps whichever dimensions a caller asks for. `ToolRuns`, `Composing`, and `Stalls` are
+  the rule that a tool's own clock is neither the agent composing the call nor a call that stalled.
 - `internal/report/`: JSON shapes both surfaces answer with, built from the cube. Contract in `docs/api.md`.
 - `internal/cache/`: per-session digests on disk, so a corpus query doesn't reparse 3.8 GB. `docs/cache.md`.
 - `internal/stats/`: filter, group, aggregate over digests. `docs/stats.md`.

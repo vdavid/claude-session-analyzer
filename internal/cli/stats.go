@@ -173,27 +173,51 @@ func writeStatsTable(a *app, result stats.Result, walk cache.CorpusResult, spec 
 		// The session count only earns its column where it can differ between rows: grouping by session puts a 1 on
 		// every one, and a single session in scope does the same.
 		sessions := countsSessions(result, spec)
+		// The two other clocks of a tool call earn a column only where they hold something the time column doesn't. On
+		// a question that isn't about tools they're subsets of it, so the `tool call` row's time already is the
+		// composing time and a second column of it would be noise.
+		composing := result.ToolClocksApart && anyGroup(result, func(g stats.Group) bool { return g.ComposingSeconds > 0 })
+		stalled := result.ToolClocksApart && anyGroup(result, func(g stats.Group) bool { return g.StalledSeconds > 0 })
 
 		tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-		headers := make([]string, 0, len(spec.GroupBy)+4)
+		headers := make([]string, 0, len(spec.GroupBy)+6)
 		for _, dim := range spec.GroupBy {
 			headers = append(headers, strings.ToUpper(string(dim)[:1])+string(dim)[1:])
 		}
-		headers = append(headers, "Time", "Calls")
+		// On a question about tools the time column is the tool running, with the two clocks carved out of it beside it,
+		// so it's named for what it holds and the share column names it again as its numerator. Anywhere else the column
+		// is every matched row and there's only one of them, so "Time" says it.
+		timeColumn, shareColumn := "Time", "Share of lane time"
+		if result.ToolClocksApart {
+			timeColumn, shareColumn = "Running", "Running / lane time"
+		}
+		headers = append(headers, timeColumn)
+		if composing {
+			headers = append(headers, "Composing")
+		}
+		if stalled {
+			headers = append(headers, "Stalled")
+		}
+		headers = append(headers, "Calls")
 		if sessions {
 			headers = append(headers, "Sessions")
 		}
 		// The share is against lane time, because that's the denominator the groups partition: an unfiltered query's
 		// column adds to 100%. Against active time a waiting group would read as 94% of a total it isn't part of.
-		fmt.Fprintln(tw, strings.Join(append(headers, "Share of lane time"), "\t"))
+		fmt.Fprintln(tw, strings.Join(append(headers, shareColumn), "\t"))
 		for _, g := range result.Groups {
 			cells := make([]string, 0, len(headers)+1)
 			for _, dim := range spec.GroupBy {
 				cells = append(cells, clip(g.Key.Value(dim), titleWidth))
 			}
-			cells = append(cells,
-				timeline.FormatDuration(asDuration(g.Seconds)),
-				count(g.Calls))
+			cells = append(cells, durationCell(g.Seconds))
+			if composing {
+				cells = append(cells, durationCell(g.ComposingSeconds))
+			}
+			if stalled {
+				cells = append(cells, durationCell(g.StalledSeconds))
+			}
+			cells = append(cells, count(g.Calls))
 			if sessions {
 				cells = append(cells, count(g.Sessions))
 			}
@@ -208,25 +232,96 @@ func writeStatsTable(a *app, result stats.Result, walk cache.CorpusResult, spec 
 		}
 	}
 
-	// Three denominators, named. The JSON carries a share against each; the table leads with lane time and spells the
-	// other two out, because "active" excluding the waiting is exactly the thing a reader has to know before dividing.
-	m := result.Matched
-	in := ""
-	if result.Totals.Sessions > 1 {
-		in = fmt.Sprintf(" in %s of %s", count(m.Sessions), plural(result.Totals.Sessions, "session"))
-	}
-	fmt.Fprintf(a.out, "\nMatched %s over %s%s, which is %s of lane time.\n",
-		timeline.FormatDuration(asDuration(m.Seconds)), plural(m.Calls, "call"), in, percent(m.ShareOfLaneTime))
-	fmt.Fprintf(a.out, "Out of %s lane time (every agent's clock added up), %s active (waiting, stalls, and API "+
-		"errors taken out), %s wall clock.\n",
-		timeline.FormatDuration(asDuration(result.Totals.LaneTimeSeconds)),
-		timeline.FormatDuration(asDuration(result.Totals.ActiveSeconds)),
-		timeline.FormatDuration(asDuration(result.Totals.WallClockSeconds)))
+	writeMatched(a, result)
+	writeLadder(a, result.Totals)
 
 	for _, note := range result.Notes {
 		fmt.Fprintf(a.out, "\n%s\n", note)
 	}
 	return nil
+}
+
+// writeMatched says what the clauses kept. On a question about tools that's up to three durations rather than one, and
+// they're never added together: their sum is a number nobody asked for. A clock holding nothing is left out, so a query
+// naming one of the three doesn't print zeroes for the other two.
+func writeMatched(a *app, result stats.Result) {
+	m := result.Matched
+	in := ""
+	if result.Totals.Sessions > 1 {
+		in = fmt.Sprintf(" in %s of %s", count(m.Sessions), plural(result.Totals.Sessions, "session"))
+	}
+
+	if !result.ToolClocksApart {
+		over := ""
+		if m.Calls > 0 {
+			over = " over " + plural(m.Calls, "call")
+		}
+		fmt.Fprintf(a.out, "\nMatched %s%s%s, which is %s of lane time.\n",
+			duration(m.Seconds), over, in, percent(m.ShareOfLaneTime))
+		return
+	}
+
+	var clocks []string
+	for _, clock := range []struct {
+		seconds float64
+		what    string
+	}{
+		{m.Seconds, "running"},
+		{m.ComposingSeconds, "composing the calls"},
+		{m.StalledSeconds, "stalled"},
+	} {
+		if clock.seconds > 0 {
+			clocks = append(clocks, duration(clock.seconds)+" "+clock.what)
+		}
+	}
+	if len(clocks) == 0 {
+		fmt.Fprintf(a.out, "\nMatched no time at all%s.\n", in)
+		return
+	}
+
+	held := strings.Join(clocks, ", ")
+	if m.Calls > 0 {
+		held = plural(m.Calls, "call") + in + ": " + held
+	} else {
+		held += in
+	}
+	fmt.Fprintf(a.out, "\nMatched %s.\n", held)
+	// The share divides the tool's own clock, so it's only worth printing when there is one.
+	if m.Seconds > 0 {
+		fmt.Fprintf(a.out, "The running time is %s of lane time.\n", percent(m.ShareOfLaneTime))
+	}
+}
+
+// writeLadder spells the denominators out as what they are: three rungs, each the one above minus something, with net
+// as the headline because it's the one answering "what did this cost in agent time". Printing them as a list rather
+// than a sentence is deliberate: the failure this whole tool exists to prevent is quoting one of them as another, and a
+// reader can't confuse two numbers whose subtraction is written between them. `docs/api.md` is the definition.
+func writeLadder(a *app, totals stats.Totals) {
+	fmt.Fprintf(a.out, "\nNet agent time %s. Each rung is the one above minus something:\n", duration(totals.NetSeconds))
+
+	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
+	for _, rung := range []struct{ name, seconds, why string }{
+		{"lane time", duration(totals.LaneTimeSeconds), "every agent's clock added up"},
+		{"net", duration(totals.NetSeconds), "minus waiting for a person or a teammate, whose clock that is"},
+		{"active", duration(totals.ActiveSeconds), "minus stalls, API errors, background-task waits, unknown waits"},
+	} {
+		fmt.Fprintf(tw, "  %s\t%s\t%s\n", rung.name, rung.seconds, rung.why)
+	}
+	if err := tw.Flush(); err != nil {
+		return
+	}
+	fmt.Fprintf(a.out, "Beside them, wall clock %s: first record to last, however many agents ran at once.\n",
+		duration(totals.WallClockSeconds))
+}
+
+// anyGroup says at least one group would put something in a column, so an empty one can be left off.
+func anyGroup(result stats.Result, has func(stats.Group) bool) bool {
+	for _, g := range result.Groups {
+		if has(g) {
+			return true
+		}
+	}
+	return false
 }
 
 // countsSessions says a per-group session count would tell a reader something it doesn't already know. Grouping by
@@ -275,17 +370,22 @@ func coveringDays(s stats.Scope) string {
 	}
 }
 
-func share(part, whole float64) float64 {
-	if whole == 0 {
-		return 0
-	}
-	return part / whole
-}
-
 func percent(fraction float64) string { return fmt.Sprintf("%.1f%%", fraction*100) }
 
 func asDuration(seconds float64) time.Duration {
 	return time.Duration(seconds * float64(time.Second))
+}
+
+// duration renders a measure for a person to read.
+func duration(seconds float64) string { return timeline.FormatDuration(asDuration(seconds)) }
+
+// durationCell is the table's version: nothing at all reads as a dash rather than as `0.0s`, so a column empty on most
+// rows doesn't drown the rows where it isn't.
+func durationCell(seconds float64) string {
+	if seconds == 0 {
+		return "-"
+	}
+	return duration(seconds)
 }
 
 func plural(n int, noun string) string {

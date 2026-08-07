@@ -223,12 +223,19 @@ func TestWhetherASessionReachedForCodegraphAndWhetherItBeatsGrepOverall(t *testi
 	closeTo(t, "groups summed", summed, overall.Matched.Seconds)
 }
 
-// "What was the net time agents spent building this, excluding waiting for me and for each other?"
-func TestNetTimeIsLaneTimeWithEveryGapTakenOut(t *testing.T) {
+// "How much of that was the agents actually producing something?" Active is the bottom rung: lane time with every gap
+// out of it. The ladder's arithmetic is held by `report.TestTheLadderHoldsFromLaneTimeDownToActive`; what this pins is
+// that a `stats` answer carries the same numbers a hand-rolled query lands on.
+func TestActiveTimeIsLaneTimeWithEveryGapTakenOut(t *testing.T) {
 	result := run(t, stats.Spec{GroupBy: []stats.Dim{stats.DimKind}}, corpus())
 
 	if got, want := result.Totals.ActiveSeconds, 237.0; got != want {
 		t.Errorf("active seconds = %v, want %v", got, want)
+	}
+	// Net keeps everything except the two waits whose clock belongs to a person or a teammate, and this corpus has one
+	// of each: 120 s on a person, 60 s on a teammate.
+	if got, want := result.Totals.NetSeconds, 417.0-180.0; got != want {
+		t.Errorf("net seconds = %v, want %v", got, want)
 	}
 
 	// Asking for the working kinds by hand has to land on the same number, which is what makes ActiveSeconds a
@@ -275,25 +282,111 @@ func TestAToolFilterCountsOnlyTheRowsTheToolRanIn(t *testing.T) {
 	}
 }
 
-// Dropping the composing rows drops the `tool call` kind with them, which is correct and worth pinning: a reader who
-// expected it and can't find it should find a note instead.
-func TestAToolFilterGroupedByKindHasNoToolCallKindLeft(t *testing.T) {
+// The composing time of a tool question isn't dropped, it's moved: out of `seconds`, which means the tool running, and
+// into `composingSeconds`. Both halves matter, so both are pinned here. A query for it used to come back empty, which is
+// how 2.24 h of `Edit` time on one real session was unreachable.
+func TestAToolQuestionReportsComposingTimeBesideTheToolsOwnClockRatherThanDroppingIt(t *testing.T) {
 	result := run(t, stats.Spec{
 		Where:   []stats.Clause{where(stats.DimClass, "checker")},
 		GroupBy: []stats.Dim{stats.DimKind},
 	}, corpus())
 
-	if len(result.Groups) != 1 {
-		t.Fatalf("wanted one kind, got %+v", result.Groups)
+	if !result.ToolClocksApart {
+		t.Fatalf("a question about a class keeps the clocks apart, and the answer should say so")
 	}
-	if got, want := result.Groups[0].Kind, string(timeline.KindToolExecution); got != want {
-		t.Errorf("kind = %q, want %q", got, want)
+	execution := group(t, result, stats.DimKind, string(timeline.KindToolExecution))
+	if got, want := execution.Seconds, 180.0; got != want {
+		t.Errorf("tool execution seconds = %v, want %v", got, want)
 	}
+
+	composing := group(t, result, stats.DimKind, string(timeline.KindToolCall))
+	if got, want := composing.ComposingSeconds, 2.0; got != want {
+		t.Errorf("composing seconds = %v, want %v: the two composing rows are the checker's calls being written", got, want)
+	}
+	if got, want := composing.Seconds, 0.0; got != want {
+		t.Errorf("composing group's seconds = %v, want %v: the agent writing a call isn't the tool running", got, want)
+	}
+	if got, want := composing.Calls, 0; got != want {
+		t.Errorf("composing group's calls = %d, want %d: the call is counted on the row the tool ran in", got, want)
+	}
+
+	// The measure answers the same question without a filter naming the kind, which is the point of it being a measure.
+	byGroup := run(t, stats.Spec{GroupBy: []stats.Dim{stats.DimGroup}}, corpus())
+	checker := group(t, byGroup, stats.DimGroup, "Bash (checker)")
+	if got, want := checker.Seconds, 180.0; got != want {
+		t.Errorf("checker seconds = %v, want %v", got, want)
+	}
+	if got, want := checker.ComposingSeconds, 2.0; got != want {
+		t.Errorf("checker composing seconds = %v, want %v", got, want)
+	}
+}
+
+// A tool question is only about the cells carrying a tool's name. The rest would land in a group keyed by an empty
+// string, which would file the session's thinking and waiting under a nameless slice of the tool breakdown.
+func TestAToolQuestionLeavesTheCellsCarryingNoToolOutEntirely(t *testing.T) {
+	result := run(t, stats.Spec{GroupBy: []stats.Dim{stats.DimGroup}}, corpus())
+
 	for _, g := range result.Groups {
-		if g.Kind == string(timeline.KindToolCall) {
-			t.Errorf("a tool question shouldn't report the composing kind, got %+v", g)
+		if g.Group == "" {
+			t.Errorf("a nameless group turned up holding %v s over %d rows", g.Seconds, g.Rows)
 		}
 	}
+	// Every group's three clocks together are what the tools cost, and thinking and waiting are in neither.
+	var summed float64
+	for _, g := range result.Groups {
+		summed += g.Seconds + g.ComposingSeconds + g.StalledSeconds
+	}
+	if summed >= result.Totals.LaneTimeSeconds {
+		t.Errorf("the tools account for %v s of %v s of lane time, which leaves no room for thinking or waiting",
+			summed, result.Totals.LaneTimeSeconds)
+	}
+}
+
+// One stalled call can be most of a tool group's time, and reporting it as the tool's own clock makes the tool look
+// pathological. On the reference session `Bash (file write)` is 69 calls over 6.36 h, of which one stalled `rm` is 6.26 h
+// and the other 68 average 5.2 s.
+func TestAStalledCallIsReportedApartFromWhatTheToolCost(t *testing.T) {
+	const day = "2026-08-05"
+	rows := call("lead", "Bash", "Bash (file write)", "rm", "file write", at(day, "10:00:00"), time.Second, 5*time.Second)
+	rows = append(rows, call("lead", "Bash", "Bash (file write)", "rm", "file write",
+		at(day, "10:00:10"), time.Second, 5*time.Second)...)
+	suspended := call("lead", "Bash", "Bash (file write)", "rm", "file write",
+		at(day, "10:00:20"), time.Second, 2*time.Hour)
+	suspended[1].Kind = timeline.KindStalled
+	rows = append(rows, suspended...)
+
+	source := stats.Source{SessionID: "s3", ProjectName: "cmdr", Cells: cells(rows), WallClockSeconds: 7300, Lanes: 1}
+	result := run(t, stats.Spec{GroupBy: []stats.Dim{stats.DimGroup}}, []stats.Source{source})
+
+	files := group(t, result, stats.DimGroup, "Bash (file write)")
+	if got, want := files.Seconds, 10.0; got != want {
+		t.Errorf("seconds = %v, want %v: two calls of 5 s each, and the suspension isn't the tool running", got, want)
+	}
+	if got, want := files.StalledSeconds, 7200.0; got != want {
+		t.Errorf("stalled seconds = %v, want %v", got, want)
+	}
+	if got, want := files.ComposingSeconds, 3.0; got != want {
+		t.Errorf("composing seconds = %v, want %v", got, want)
+	}
+	if got, want := files.Calls, 3; got != want {
+		t.Errorf("calls = %d, want %d: a stalled call was still a call", got, want)
+	}
+
+	// A question that isn't about tools has to partition lane time instead, so there the stall is in `seconds` and the
+	// measure beside it says how much of that it was.
+	byKind := run(t, stats.Spec{GroupBy: []stats.Dim{stats.DimKind}}, []stats.Source{source})
+	if byKind.ToolClocksApart {
+		t.Errorf("grouping by kind isn't a question about tools, so the clocks stay where lane time can be partitioned")
+	}
+	stalled := group(t, byKind, stats.DimKind, string(timeline.KindStalled))
+	if got, want := stalled.Seconds, 7200.0; got != want {
+		t.Errorf("stalled kind seconds = %v, want %v", got, want)
+	}
+	var summed float64
+	for _, g := range byKind.Groups {
+		summed += g.Seconds
+	}
+	closeTo(t, "the kinds summed", summed, byKind.Totals.LaneTimeSeconds)
 }
 
 func TestAnEmptyScopeAnswersZeroRatherThanDividingByZero(t *testing.T) {

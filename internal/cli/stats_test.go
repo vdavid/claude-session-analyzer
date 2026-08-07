@@ -23,7 +23,7 @@ func TestStatsSaysWhereOneSessionsTimeWent(t *testing.T) {
 		t.Fatalf("exit %d, stderr: %s", code, stderr)
 	}
 
-	for _, want := range []string{"Kind", "Share of lane time", "lane time", "active", "wall clock"} {
+	for _, want := range []string{"Kind", "Share of lane time", "lane time", "net", "active", "wall clock"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("wanted %q in the answer:\n%s", want, stdout)
 		}
@@ -37,6 +37,63 @@ func TestStatsSharesAgainstLaneTimeRatherThanActive(t *testing.T) {
 	_, stdout, _ := run(t, "stats", goldenID, "--root", goldenRoot(), "--group-by", "kind")
 	if strings.Contains(stdout, "Share of active") {
 		t.Errorf("the group column has to name lane time, the denominator the groups partition:\n%s", stdout)
+	}
+}
+
+// TestStatsPrintsTheLadderAsRungsRatherThanASentence holds the layout decision. Three durations in one sentence is how a
+// reader ends up quoting the wrong one, so each rung gets a line with the subtraction written beside it, and net leads
+// because it's the one answering "what did this cost".
+func TestStatsPrintsTheLadderAsRungsRatherThanASentence(t *testing.T) {
+	isolate(t)
+	_, stdout, _ := run(t, "stats", goldenID, "--root", goldenRoot(), "--group-by", "kind")
+
+	lines := strings.Split(stdout, "\n")
+	rungs := map[string]bool{}
+	for _, line := range lines {
+		for _, rung := range []string{"lane time", "net", "active"} {
+			if strings.HasPrefix(strings.TrimSpace(line), rung+" ") {
+				rungs[rung] = true
+			}
+		}
+	}
+	for _, rung := range []string{"lane time", "net", "active"} {
+		if !rungs[rung] {
+			t.Errorf("no line of its own for the %q rung:\n%s", rung, stdout)
+		}
+	}
+	if !strings.Contains(stdout, "Net agent time") {
+		t.Errorf("the summary should lead with net:\n%s", stdout)
+	}
+	for _, subtraction := range []string{"minus waiting for a person or a teammate", "minus stalls"} {
+		if !strings.Contains(stdout, subtraction) {
+			t.Errorf("a rung without its subtraction beside it is a number a reader can misquote, wanted %q:\n%s",
+				subtraction, stdout)
+		}
+	}
+}
+
+// TestStatsNamesTheClockItsTimeColumnHolds guards the reading a tool question invites. Its time column is the tool
+// running, with the agent composing the call and any stall in columns of their own, so a header saying "Time" would
+// invite a reader to take it for everything the tool cost.
+func TestStatsNamesTheClockItsTimeColumnHolds(t *testing.T) {
+	isolate(t)
+	_, tools, _ := run(t, "stats", goldenID, "--root", goldenRoot(), "--group-by", "group")
+	for _, want := range []string{"Running", "Composing", "Stalled", "Running / lane time"} {
+		if !strings.Contains(tools, want) {
+			t.Errorf("wanted a %q column on a tool question:\n%s", want, tools)
+		}
+	}
+
+	// A question that isn't about tools has one clock, and the other two would be the same numbers a second time: the
+	// `tool call` row already is the composing time and the `stalled` row already is the stalled time.
+	_, kinds, _ := run(t, "stats", goldenID, "--root", goldenRoot(), "--group-by", "kind")
+	for _, unwanted := range []string{"Composing", "Stalled", "Running"} {
+		if strings.Contains(kinds, unwanted) {
+			t.Errorf("a kind breakdown shouldn't carry a %q column, its rows are those numbers:\n%s", unwanted, kinds)
+		}
+	}
+	if !strings.Contains(kinds, "Share of lane time") {
+		t.Errorf("a kind breakdown shares against lane time and says so:\n%s", kinds)
 	}
 }
 
@@ -64,7 +121,7 @@ func TestStatsCountsAToolCallOnceRatherThanTwice(t *testing.T) {
 		}
 	}
 	if len(body.Notes) == 0 {
-		t.Errorf("a tool question has to say it counted only the rows a tool ran in:\n%s", stdout)
+		t.Errorf("a tool question has to say which of a call's three clocks its seconds are:\n%s", stdout)
 	}
 }
 

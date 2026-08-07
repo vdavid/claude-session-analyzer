@@ -53,6 +53,11 @@ type Result struct {
 	Groups []Group `json:"groups"`
 	// Truncated is how many groups Spec.Top left out, zero when nothing was cut.
 	Truncated int `json:"truncated,omitempty"`
+	// ToolClocksApart says each call's three clocks were kept apart, because the query is about tools: Measures.Seconds
+	// is the tool running, with ComposingSeconds and StalledSeconds beside it rather than inside it. False on any other
+	// question, where Seconds is every matched cell's clock and the other two are subsets of it, because a breakdown by
+	// kind or by day has to partition lane time. A renderer labels its time column from this.
+	ToolClocksApart bool `json:"toolClocksApart"`
 	// Notes are what a reader has to know to read the answer right.
 	Notes []string `json:"notes,omitempty"`
 }
@@ -75,9 +80,11 @@ type Totals struct {
 	// WallClockSeconds is added up across sessions, so two sessions that ran side by side count their overlap twice.
 	// It's the honest denominator for one session and a loose one for a corpus.
 	WallClockSeconds float64 `json:"wallClockSeconds"`
-	// LaneTimeSeconds is every lane's rows added up, which is larger than wall clock whenever lanes ran at once.
-	// ActiveSeconds is lane time with every gap taken out: what the agents spent working rather than waiting.
+	// LaneTimeSeconds, NetSeconds, and ActiveSeconds are the ladder: every lane's clock added up, then minus the waits
+	// whose clock belongs to a person or a teammate, then minus the gaps net keeps. Each is the one above minus
+	// something, so they're never rivals. The arithmetic and the reason each rung exists: `docs/api.md`.
 	LaneTimeSeconds float64 `json:"laneTimeSeconds"`
+	NetSeconds      float64 `json:"netSeconds"`
 	ActiveSeconds   float64 `json:"activeSeconds"`
 	Rows            int     `json:"rows"`
 	Lanes           int     `json:"lanes"`
@@ -86,8 +93,17 @@ type Totals struct {
 
 // Measures are what a query counts, for the whole match and for each group.
 type Measures struct {
+	// Seconds is the matched cells' clock. On a question about tools (Result.ToolClocksApart) the two measures below
+	// are carved out of it and it means the tool running; on any other question it's every matched cell, because a
+	// breakdown by kind or by day has to partition lane time.
 	Seconds float64 `json:"seconds"`
-	Rows    int     `json:"rows"`
+	// ComposingSeconds is the agent's clock writing the calls, and StalledSeconds is the calls that came back far too
+	// late to have been running. Both are per-call clocks that would otherwise read as the tool's own, and they invert
+	// per tool: `Edit` is nearly all composing, `Bash (checker)` nearly all running. A stall is still one of Calls,
+	// because it was a call; a composing row never was one.
+	ComposingSeconds float64 `json:"composingSeconds"`
+	StalledSeconds   float64 `json:"stalledSeconds"`
+	Rows             int     `json:"rows"`
 	// Calls counts the times a tool ran, which is one per call rather than two. See Run.
 	Calls int `json:"calls"`
 	// Lanes is how many lanes contributed, counted per session and added up across them, because a lane belongs to one
@@ -101,11 +117,12 @@ type Measures struct {
 	TimedOut int `json:"timedOut"`
 }
 
-// Matched is what the Where clauses kept, with its share of each of the three denominators. A share is a fraction, not
-// a percentage, and it's zero when the denominator is.
+// Matched is what the Where clauses kept, with its share of each denominator: the ladder's three rungs and wall clock.
+// A share is a fraction, not a percentage, it's over Seconds alone, and it's zero when the denominator is.
 type Matched struct {
 	Measures
 	ShareOfLaneTime  float64 `json:"shareOfLaneTime"`
+	ShareOfNet       float64 `json:"shareOfNet"`
 	ShareOfActive    float64 `json:"shareOfActive"`
 	ShareOfWallClock float64 `json:"shareOfWallClock"`
 }
@@ -124,10 +141,14 @@ type Key struct {
 	Project string `json:"project,omitempty"`
 }
 
-// Group is one row of the answer.
+// Group is one row of the answer, ordered by weight.
 type Group struct {
 	Key
 	Measures
+	// ShareOfLaneTime is Seconds over lane time, so on a question about tools it's the share of lane time the tool spent
+	// running rather than the share the group accounts for: the other two clocks stay named beside it instead of being
+	// folded into one percentage. Groups are ordered by weight rather than by this, so a group carrying one long stall
+	// sits high with a small share, which is the anomaly showing itself rather than a sorting bug.
 	ShareOfLaneTime float64 `json:"shareOfLaneTime"`
 }
 
@@ -186,11 +207,13 @@ func (k *Key) set(dim Dim, value string) {
 
 // Run answers the question.
 //
-// A query that names a tool dimension counts only the rows a tool actually ran in (`agg.ToolRuns`). Every call leaves
-// two rows, the agent composing it and the tool running, and both carry the tool's name, so a total that takes them
-// all reports the checker as costing more than it did and the answer looks perfectly reasonable. The cost of the rule
-// is that such a query has no `tool call` kind left in it, which is correct: that row is the agent's, not the tool's.
-// `Spec.IncludeComposingRows` turns it off for the rare question about the agent instead.
+// A query that names a tool dimension keeps each call's three clocks apart, because all three arrive on a cell carrying
+// the tool's name and adding them together reports the checker as costing what the agent and a suspended session cost,
+// while the answer looks perfectly reasonable. `Measures.Seconds` is the tool running, `ComposingSeconds` is the agent
+// writing the call, and `StalledSeconds` is a call that came back far too late to have been running. The cost of the
+// rule is that such a query has no `tool call` kind left in it, which is correct: that row is the agent's, not the
+// tool's, and its time is in `composingSeconds` rather than dropped. `Spec.IncludeComposingRows` turns the whole split
+// off for the rare question about the agent instead.
 //
 // The denominators in Totals are always the unfiltered whole, composing rows included, so a share says what part of
 // the session went somewhere rather than what part of the filter did.
@@ -200,24 +223,25 @@ func Run(spec Spec, sessions []Source) (Result, error) {
 	}
 
 	result := Result{
-		Scope:  scopeOf(spec, sessions),
-		Totals: totalsOf(sessions),
+		Scope:           scopeOf(spec, sessions),
+		Totals:          totalsOf(sessions),
+		ToolClocksApart: spec.aboutTools() && !spec.IncludeComposingRows,
 	}
 
-	toolRunsOnly := spec.aboutTools() && !spec.IncludeComposingRows
 	matched := &acc{}
 	groups := map[Key]*acc{}
 
 	for _, source := range sessions {
-		cells := source.Cells
-		if toolRunsOnly {
-			cells = agg.ToolRuns(cells)
-		}
-		for _, cell := range cells {
+		for _, cell := range source.Cells {
+			// A question about tools has nothing to ask of a cell carrying no tool, and folding those into a group
+			// keyed by an empty name would put the session's thinking and waiting under a nameless slice.
+			if result.ToolClocksApart && !cell.IsAboutATool() {
+				continue
+			}
 			if !keeps(spec, cell, source) {
 				continue
 			}
-			matched.add(cell, source.SessionID)
+			matched.add(cell, source.SessionID, result.ToolClocksApart)
 			if len(spec.GroupBy) == 0 {
 				continue
 			}
@@ -227,13 +251,14 @@ func Run(spec Spec, sessions []Source) (Result, error) {
 				into = &acc{}
 				groups[key] = into
 			}
-			into.add(cell, source.SessionID)
+			into.add(cell, source.SessionID, result.ToolClocksApart)
 		}
 	}
 
 	result.Matched = Matched{
 		Measures:         matched.measures(),
 		ShareOfLaneTime:  share(matched.seconds(), result.Totals.LaneTimeSeconds),
+		ShareOfNet:       share(matched.seconds(), result.Totals.NetSeconds),
 		ShareOfActive:    share(matched.seconds(), result.Totals.ActiveSeconds),
 		ShareOfWallClock: share(matched.seconds(), result.Totals.WallClockSeconds),
 	}
@@ -246,13 +271,13 @@ func Run(spec Spec, sessions []Source) (Result, error) {
 			ShareOfLaneTime: share(into.seconds(), result.Totals.LaneTimeSeconds),
 		})
 	}
-	sortGroups(result.Groups, spec.GroupBy)
+	sortGroups(result.Groups, spec.GroupBy, result.ToolClocksApart)
 	if spec.Top > 0 && len(result.Groups) > spec.Top {
 		result.Truncated = len(result.Groups) - spec.Top
 		result.Groups = result.Groups[:spec.Top]
 	}
 
-	result.Notes = notesFor(spec, sessions, toolRunsOnly)
+	result.Notes = notesFor(spec, sessions, result.ToolClocksApart)
 	return result, nil
 }
 
@@ -305,10 +330,14 @@ func keyOf(cell agg.Cell, source Source, dims []Dim) Key {
 // acc adds cells up.
 type acc struct {
 	duration time.Duration
-	rows     int
-	calls    int
-	errors   int
-	timedOut int
+	// composing and stalled are the two clocks of a call that aren't the tool running. They're always summed, and
+	// whether they're also inside duration is what `apart` decides. See add.
+	composing time.Duration
+	stalled   time.Duration
+	rows      int
+	calls     int
+	errors    int
+	timedOut  int
 	// lanes and counted are both per session, because a lane belongs to one: two sessions with three lanes each are
 	// six lanes, not three. Cells that carry a lane land in the set; cells summed past the lane dimension carry a count
 	// instead, and the largest count seen is the best that evidence supports.
@@ -319,12 +348,28 @@ type acc struct {
 	sessions map[string]bool
 }
 
-func (a *acc) add(cell agg.Cell, session string) {
-	a.duration += cell.Duration
-	a.rows += cell.Rows
-	a.calls += cell.Calls
-	a.errors += cell.Errors
-	a.timedOut += cell.TimedOut
+// add folds one cell in. `apart` is Result.ToolClocksApart: with it, a call's composing and stalled time comes out of
+// duration so what's left is the tool running, and the composing row stops counting as a row because it never was a
+// call. Without it the cell is added whole, because a breakdown by kind or by day has to partition lane time, and the
+// two clocks are reported as the subsets of it they are.
+func (a *acc) add(cell agg.Cell, session string, apart bool) {
+	composing, stalled := cell.IsComposing(), cell.IsStall()
+	switch {
+	case composing:
+		a.composing += cell.Duration
+	case stalled:
+		a.stalled += cell.Duration
+	}
+
+	if !apart || !composing {
+		a.rows += cell.Rows
+		a.calls += cell.Calls
+		a.errors += cell.Errors
+		a.timedOut += cell.TimedOut
+	}
+	if !apart || !(composing || stalled) {
+		a.duration += cell.Duration
+	}
 
 	if a.sessions == nil {
 		a.sessions = map[string]bool{}
@@ -363,18 +408,20 @@ func (a *acc) measures() Measures {
 		}
 	}
 	return Measures{
-		Seconds:  a.seconds(),
-		Rows:     a.rows,
-		Calls:    a.calls,
-		Lanes:    lanes,
-		Sessions: len(a.sessions),
-		Errors:   a.errors,
-		TimedOut: a.timedOut,
+		Seconds:          a.seconds(),
+		ComposingSeconds: report.Seconds(a.composing),
+		StalledSeconds:   report.Seconds(a.stalled),
+		Rows:             a.rows,
+		Calls:            a.calls,
+		Lanes:            lanes,
+		Sessions:         len(a.sessions),
+		Errors:           a.errors,
+		TimedOut:         a.timedOut,
 	}
 }
 
-// totalsOf sums every session in scope, unfiltered. Lane time and active seconds come from `report.TotalsFrom`, so the
-// denominator here is the same number the API reports for the same sessions.
+// totalsOf sums every session in scope, unfiltered. The ladder comes from `report.TotalsFrom`, so the denominators here
+// are the same numbers the API reports for the same sessions.
 func totalsOf(sessions []Source) Totals {
 	var (
 		cells []agg.Cell
@@ -391,6 +438,7 @@ func totalsOf(sessions []Source) Totals {
 	return Totals{
 		WallClockSeconds: roundSeconds(wall),
 		LaneTimeSeconds:  whole.LaneTimeSeconds,
+		NetSeconds:       whole.NetSeconds,
 		ActiveSeconds:    whole.ActiveSeconds,
 		Rows:             whole.Rows,
 		Lanes:            lanes,
@@ -421,7 +469,7 @@ func scopeOf(spec Spec, sessions []Source) Scope {
 
 // notesFor says what a reader has to know to read the answer right. A note is for something the numbers can't show on
 // their own, so an ordinary answer carries none.
-func notesFor(spec Spec, sessions []Source, toolRunsOnly bool) []string {
+func notesFor(spec Spec, sessions []Source, clocksApart bool) []string {
 	if len(sessions) == 0 {
 		return []string{"No sessions are in scope, so every number here is zero. Widen the range, or check the session or project the query named."}
 	}
@@ -437,10 +485,10 @@ func notesFor(spec Spec, sessions []Source, toolRunsOnly bool) []string {
 	}
 
 	switch {
-	case toolRunsOnly:
-		notes = append(notes, "Counting only the rows a tool ran in. The `tool call` row beside each one is the agent composing the call, and counting both would report every tool as costing about twice what it did, so a breakdown by kind shows no `tool call` here.")
+	case clocksApart:
+		notes = append(notes, "A call's time is split three ways, because all three parts arrive under the tool's name: the tool running (`seconds`), the agent composing the call (`composingSeconds`), and a call that came back far too late to have been running (`stalledSeconds`). Adding them together reports a tool as costing what the agent and a suspended session cost, so read the one you mean. Grouped by kind, the `tool call` row reports no running time at all: its clock is the composing one.")
 	case spec.aboutTools():
-		notes = append(notes, "Composing rows are included, so each call counts twice: once for the agent writing it, once for the tool running it. That's a question about the agent rather than about the tool.")
+		notes = append(notes, "Composing rows are added into `seconds` here, so each call counts twice: once for the agent writing it, once for the tool running it. That's a question about the agent rather than about the tool.")
 	}
 	return notes
 }
@@ -458,11 +506,28 @@ func carries(sessions []Source, dim Dim) bool {
 	return false
 }
 
+// weight is what "biggest first" means for one group, and what Spec.Top keeps.
+//
+// On a question about tools it's every clock the group holds, not only the tool's own: a group whose time went into
+// composing its calls (`Edit` is 2.24 h composing against 0.03 h running on the reference session) or into one stall
+// (`Bash (file write)` is 6.26 h of one suspended `rm`) would otherwise sink below groups costing a fraction of it, and
+// `--top 8` would hide exactly the rows worth looking at. Anywhere else the other two clocks are subsets of Seconds, so
+// adding them would count time twice.
+func (g Group) weight(clocksApart bool) float64 {
+	if !clocksApart {
+		return g.Seconds
+	}
+	return g.Seconds + g.ComposingSeconds + g.StalledSeconds
+}
+
 // sortGroups puts the biggest first, breaks a tie on calls, and falls back to the key in the order the caller grouped
 // by, so two runs over the same sessions agree.
-func sortGroups(groups []Group, dims []Dim) {
+func sortGroups(groups []Group, dims []Dim, clocksApart bool) {
 	slices.SortFunc(groups, func(a, b Group) int {
-		if c := cmp.Or(cmp.Compare(b.Seconds, a.Seconds), cmp.Compare(b.Calls, a.Calls)); c != 0 {
+		if c := cmp.Or(
+			cmp.Compare(b.weight(clocksApart), a.weight(clocksApart)),
+			cmp.Compare(b.Calls, a.Calls),
+		); c != 0 {
 			return c
 		}
 		for _, dim := range dims {

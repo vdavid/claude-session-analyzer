@@ -19,6 +19,10 @@ never cached. The reasoning and the on-disk layout: `docs/cache.md`.
   second, and a stale digest is invisibly wrong.
 - **Bump `Version` when the derivation's output changes.** That's how a rule change in `internal/timeline` invalidates
   every digest on disk, and nothing else does it.
+- **Bump it for a stored number changing meaning, too.** `TestTheDigestVersionMovesWithTheDerivation` hashes the golden
+  CSV, so it can't see this case: version 3 added `Totals.NetSeconds` and took the stalls out of a tool group's
+  `Seconds`, off rows version 2 derived identically. A digest is an answer, and an answer under the old definitions is
+  invisibly wrong even when the rows behind it never moved.
 - **One file per session, never one per project.** Several agents query the corpus at once, and a file holding a
   project's sessions would need read, modify, write, which means a lock. Each file goes down as a temp file and an
   `os.Rename` in the same directory, so a reader sees one whole version or the other and the last writer wins with a

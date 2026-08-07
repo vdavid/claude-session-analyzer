@@ -3,10 +3,10 @@ name: claude-session-stats
 description: >
     Answer questions about David's own Claude Code sessions from the transcripts on this machine: where time went, how
     long a session or a tool took, which tools the agents reached for, how much time went into waiting (on him, on
-    teammates, on background tasks), net working time with waiting excluded, how many sessions in a period and how long
-    they ran, and whether agents preferred one tool over another. Use whenever a question is about past Claude Code
-    sessions, agents, subagents, tool use, or where the time went. Also use for "how much time did I spend on X", "did
-    my agents use codegraph", "how long was I waiting", "how many sessions last month".
+    teammates, on background tasks), net agent time and active working time with the waiting excluded, how many sessions
+    in a period and how long they ran, and whether agents preferred one tool over another. Use whenever a question is
+    about past Claude Code sessions, agents, subagents, tool use, or where the time went. Also use for "how much time
+    did I spend on X", "did my agents use codegraph", "how long was I waiting", "how many sessions last month".
 ---
 
 # Claude session stats
@@ -25,17 +25,30 @@ claude-session-analyzer cache warm
 First run parses everything: 3.9 s over 735 sessions (measured 2026-08-07). After that only changed sessions reparse,
 and a corpus query is about 0.25 s. Single-session questions need no warm.
 
-## Three numbers, never interchangeable
+## The ladder, and wall clock beside it
 
-Say which one you're quoting.
+Three durations over the same rows, each one the rung above minus something. Say which rung you're quoting. Real
+numbers, one session, `532ac591`:
 
-- **wall clock**: how long the session took.
-- **lane time**: every agent's clock added up. Bigger whenever agents ran at once (428,756 s against 276,792 s wall
-  clock on one real session). A breakdown by activity is a breakdown of lane time.
-- **active**: lane time minus every gap (waiting on a person, a teammate, a background task, plus stalls and API
-  errors). This is "net time the agents spent building it".
+```
+lane time  119h05m  every agent's clock added up
+  net       45h11m  minus waiting for a person, minus waiting for a teammate
+  active    38h20m  minus stalls, API errors, background-task waits, unknown waits
+```
 
-`activeSeconds` is a field. Never compute it by hand from the pie.
+- **lane time** (`laneTimeSeconds`): bigger than wall clock whenever agents ran at once. A breakdown by activity or by
+  tool is a breakdown of lane time.
+- **net** (`netSeconds`): the agent time the work actually cost. Waiting on a teammate is already counted as that
+  teammate's own lane time, so keeping it counts the same work twice, and waiting on David was never agent time. Stalls,
+  API errors, background-task waits, and compacting all stay in.
+- **active** (`activeSeconds`): how much was producing. Different question from net, not a better answer: net on that
+  session holds a 6h15m stalled `rm` that active doesn't.
+- **wall clock** (`wallClockSeconds`): how long the session took, first record to last. Not a rung.
+
+All four are fields. Never compute one by hand from the pie.
+
+For "how much time did this cost", quote net. For "how much of it was real work", quote active. For "how long did this
+take", quote wall clock.
 
 ## Commands
 
@@ -79,7 +92,19 @@ Time and runs spent on the checker script, plus its share:
 claude-session-analyzer stats 532ac591 --where class=checker --group-by leaf --json
 ```
 
-Read `matched.seconds`, `matched.calls`, `matched.shareOfActive`.
+Read `matched.seconds`, `matched.calls`, `matched.shareOfLaneTime`.
+
+How much of a tool's time was the tool, and how much was the agent writing the call:
+
+```sh
+claude-session-analyzer stats 532ac591 --group-by group --top 8
+```
+
+Three clocks per call, never added together: `seconds` is the tool running, `composingSeconds` is the agent writing the
+call, `stalledSeconds` is a call that came back far too late to have been running. The split inverts per tool, so read
+the one the question asks for. On that session `Edit` is 2.24 h composing against 0.03 h running over 1,032 calls, while
+`Bash (checker)` is 0.40 h composing against 7.86 h running over 344, and `Bash (file write)` is 6.26 h of one stalled
+`rm` plus 0.1 h across its other 68 calls.
 
 codegraph vs grep, across the year:
 
@@ -87,7 +112,7 @@ codegraph vs grep, across the year:
 claude-session-analyzer stats --since 2026-01-01 --where class=search,mcp --group-by group --top 15
 ```
 
-Where a session's time went, and net working time:
+Where a session's time went, plus the whole ladder under the table:
 
 ```sh
 claude-session-analyzer stats 532ac591 --group-by kind
@@ -109,8 +134,8 @@ claude-session-analyzer stats --where 'group=codegraph*' --group-by project --js
 
 - **Bound the output.** Always `--top`, always a `--limit`. Never `timeline --json --rows` on a big session: 8 MB of
   JSON into context. Rows belong in a CSV: `timeline <id> --out /tmp/t.csv`.
-- **A tool's own clock excludes the agent composing the call.** The CLI already handles this; don't add the two together
-  from raw rows.
+- **A tool's own clock excludes the agent composing the call, and excludes a stall.** The CLI already splits them into
+  `seconds`, `composingSeconds`, and `stalledSeconds`; never add two of them together, and say which one a number is.
 - **Quote the denominator** with any percentage.
 - **`sessions` and `lanes` never sum.** Distinct counts: a session in two groups counts once in each. For a per-session
   rate divide by `matched.sessions`, never `totals.sessions`, or you divide by sessions that never did the thing.

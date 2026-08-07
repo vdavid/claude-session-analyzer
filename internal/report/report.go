@@ -79,9 +79,13 @@ type Totals struct {
 	// number in a multi-agent session; don't present one as the other.
 	WallClockSeconds float64 `json:"wallClockSeconds"`
 	LaneTimeSeconds  float64 `json:"laneTimeSeconds"`
-	// ActiveSeconds is lane time with every gap taken out: what the agents spent working, rather than waiting on a
-	// person, a teammate, a background task, a stall, or the API. It's a named number because it's the one people ask
-	// for ("net time building this") and the one they'd otherwise compute by hand and get wrong.
+	// NetSeconds and ActiveSeconds are the two rungs below lane time, each the one above minus something. Net is lane
+	// time minus waiting for a person and waiting for a teammate (`Kind.IsSomeoneElsesClock`), so it's the agent time
+	// the session actually cost: a wait on a teammate is already that teammate's own lane time, and counting it here
+	// counts the same work twice. Active is net minus the gaps net keeps (stalls, API errors, background-task waits,
+	// unknown waits), so it answers a different question, "how much was producing", and neither replaces the other. On
+	// the reference session net holds a 6h15m stall that active doesn't. The arithmetic is in `docs/api.md`.
+	NetSeconds    float64 `json:"netSeconds"`
 	ActiveSeconds float64 `json:"activeSeconds"`
 	Rows          int     `json:"rows"`
 	Lanes         int     `json:"lanes"`
@@ -102,13 +106,28 @@ type KindTotal struct {
 // what the engine's ToolID calls it: `Bash (git)`, `codegraph (MCP)`, `Read`.
 //
 // The counts are calls, not rows. Every call has one row for the agent composing it and one for the tool running, and
-// only the second is counted, so Calls is the number of times the tool was actually used and Seconds is what it cost.
+// only the second is counted, so Calls is the number of times the tool was actually used.
+//
+// The time is three numbers, because a call spends it on three clocks and adding them together hides which. See
+// Seconds, ComposingSeconds, and StalledSeconds below, and `docs/api.md`.
 type ToolGroupTotal struct {
 	Group string `json:"group"`
 	// Class is what kind of work the group does, which is what colours it. Every tool in a group shares it.
-	Class   string  `json:"class"`
-	Calls   int     `json:"calls"`
+	Class string `json:"class"`
+	Calls int    `json:"calls"`
+	// Seconds is the tool running: its own wall clock, including anything the tool waited on. The other two clocks are
+	// out of it.
 	Seconds float64 `json:"seconds"`
+	// ComposingSeconds is the agent's clock writing the calls. It inverts per tool rather than being a rounding error:
+	// on the reference session the `Edit` group spent 2.24 h composing against 0.03 h running, because the model
+	// streams the whole diff as the call's arguments, while `Bash (checker)` spent 0.40 h composing against 7.86 h
+	// running (verified 2026-08-08).
+	ComposingSeconds float64 `json:"composingSeconds"`
+	// StalledSeconds is the time of calls that came back far too late to have been running, which is a suspended agent
+	// rather than a slow tool. Left out when nothing stalled. On the reference session `Bash (file write)` looks
+	// pathological at 6.36 h over 69 calls until this splits one stalled `rm` of 6.26 h off the other 68, which average
+	// 5.2 s. The stall is still one of Calls: it was a call.
+	StalledSeconds float64 `json:"stalledSeconds,omitempty"`
 	// Lanes is how many lanes made one of these calls, which answers "who used this" without reading the rows. It's
 	// counted per group rather than added up from the tools, because one lane calling two of them is still one lane.
 	Lanes    int `json:"lanes"`
@@ -118,17 +137,19 @@ type ToolGroupTotal struct {
 	Tools []ToolTotal `json:"tools"`
 }
 
-// ToolTotal is one exact tool inside a group.
+// ToolTotal is one exact tool inside a group. The three clocks mean what they do on the group.
 type ToolTotal struct {
 	// Tool is the raw name the harness used, so a reader can grep a transcript for it. Leaf is the part that varies
 	// inside the group: an MCP method, or the program a Bash call ran.
-	Tool     string  `json:"tool"`
-	Leaf     string  `json:"leaf"`
-	Calls    int     `json:"calls"`
-	Seconds  float64 `json:"seconds"`
-	Lanes    int     `json:"lanes"`
-	Errors   int     `json:"errors,omitempty"`
-	TimedOut int     `json:"timedOut,omitempty"`
+	Tool             string  `json:"tool"`
+	Leaf             string  `json:"leaf"`
+	Calls            int     `json:"calls"`
+	Seconds          float64 `json:"seconds"`
+	ComposingSeconds float64 `json:"composingSeconds"`
+	StalledSeconds   float64 `json:"stalledSeconds,omitempty"`
+	Lanes            int     `json:"lanes"`
+	Errors           int     `json:"errors,omitempty"`
+	TimedOut         int     `json:"timedOut,omitempty"`
 }
 
 // Lane is one swimlane: when the lane was alive, where its holes are, and what it spent its time on.
@@ -276,15 +297,22 @@ func TotalsFrom(cells []agg.Cell) Totals {
 	whole := agg.Sum(cells)
 	byKind := agg.RollUp(cells, agg.ByKind)
 
-	var active time.Duration
+	// The ladder, one pass: net drops the clocks that belong to someone else, and active drops the gaps net keeps.
+	var net, active time.Duration
 	for _, c := range byKind {
-		if !timeline.Kind(c.Kind).IsGap() {
+		kind := timeline.Kind(c.Kind)
+		if kind.IsSomeoneElsesClock() {
+			continue
+		}
+		net += c.Duration
+		if !kind.IsGap() {
 			active += c.Duration
 		}
 	}
 
 	return Totals{
 		LaneTimeSeconds: Seconds(whole.Duration),
+		NetSeconds:      Seconds(net),
 		ActiveSeconds:   Seconds(active),
 		Rows:            whole.Rows,
 		ByKind:          KindTotals(cells),
@@ -313,28 +341,38 @@ func KindTotals(cells []agg.Cell) []KindTotal {
 }
 
 // ToolTotals renders the tool breakdown, most calls first, ties broken by name so two sessions with the same tools list
-// them the same way. It reports each tool's own clock, so the rows where an agent was composing a call drop out
-// (`agg.ToolRuns`) rather than inflating what the tool cost.
+// them the same way.
+//
+// A call's time is split three ways rather than added together. `agg.ToolRuns` drops the rows where an agent was
+// composing a call, which would otherwise inflate what the tool cost, and those rows come back as ComposingSeconds; the
+// stalls inside the runs come out of Seconds and back as StalledSeconds. All three carry the group's name, so the three
+// together account for every row the grouping rule put in the group.
 func ToolTotals(cells []agg.Cell) []ToolGroupTotal {
 	runs := agg.ToolRuns(cells)
+	const leafDims = agg.ByGroup | agg.ByLeaf | agg.ByTool | agg.ByClass
+	const groupDims = agg.ByGroup | agg.ByClass
+	byLeaf, byGroup := otherClocks(cells, leafDims), otherClocks(cells, groupDims)
 
 	leaves := map[string][]agg.Cell{}
-	for _, c := range agg.RollUp(runs, agg.ByGroup|agg.ByLeaf|agg.ByTool|agg.ByClass) {
+	for _, c := range agg.RollUp(runs, leafDims) {
 		leaves[c.Group] = append(leaves[c.Group], c)
 	}
 
 	out := make([]ToolGroupTotal, 0, len(leaves))
-	for _, group := range agg.RollUp(runs, agg.ByGroup|agg.ByClass) {
+	for _, group := range agg.RollUp(runs, groupDims) {
 		tools := make([]ToolTotal, 0, len(leaves[group.Group]))
 		for _, leaf := range leaves[group.Group] {
+			other := byLeaf[leaf.Key]
 			tools = append(tools, ToolTotal{
-				Tool:     leaf.Tool,
-				Leaf:     leaf.Leaf,
-				Calls:    leaf.Calls,
-				Seconds:  Seconds(leaf.Duration),
-				Lanes:    leaf.Lanes,
-				Errors:   leaf.Errors,
-				TimedOut: leaf.TimedOut,
+				Tool:             leaf.Tool,
+				Leaf:             leaf.Leaf,
+				Calls:            leaf.Calls,
+				Seconds:          Seconds(leaf.Duration - other.stalled),
+				ComposingSeconds: Seconds(other.composing),
+				StalledSeconds:   Seconds(other.stalled),
+				Lanes:            leaf.Lanes,
+				Errors:           leaf.Errors,
+				TimedOut:         leaf.TimedOut,
 			})
 		}
 		slices.SortFunc(tools, func(a, b ToolTotal) int {
@@ -347,15 +385,18 @@ func ToolTotals(cells []agg.Cell) []ToolGroupTotal {
 			return 1
 		})
 
+		other := byGroup[group.Key]
 		out = append(out, ToolGroupTotal{
-			Group:    group.Group,
-			Class:    group.Class,
-			Calls:    group.Calls,
-			Seconds:  Seconds(group.Duration),
-			Lanes:    group.Lanes,
-			Errors:   group.Errors,
-			TimedOut: group.TimedOut,
-			Tools:    tools,
+			Group:            group.Group,
+			Class:            group.Class,
+			Calls:            group.Calls,
+			Seconds:          Seconds(group.Duration - other.stalled),
+			ComposingSeconds: Seconds(other.composing),
+			StalledSeconds:   Seconds(other.stalled),
+			Lanes:            group.Lanes,
+			Errors:           group.Errors,
+			TimedOut:         group.TimedOut,
+			Tools:            tools,
 		})
 	}
 	slices.SortFunc(out, func(a, b ToolGroupTotal) int {
@@ -367,6 +408,29 @@ func ToolTotals(cells []agg.Cell) []ToolGroupTotal {
 		}
 		return 1
 	})
+	return out
+}
+
+// clocks is the time a tool group holds that isn't the tool running.
+type clocks struct {
+	composing time.Duration
+	stalled   time.Duration
+}
+
+// otherClocks sums the composing and stalled time per key, at the same grain the runs beside it are rolled up to, so a
+// group and a leaf each look their own two numbers up rather than re-deriving them.
+func otherClocks(cells []agg.Cell, dims agg.Dim) map[agg.Key]clocks {
+	out := map[agg.Key]clocks{}
+	for _, c := range agg.RollUp(agg.Composing(cells), dims) {
+		entry := out[c.Key]
+		entry.composing += c.Duration
+		out[c.Key] = entry
+	}
+	for _, c := range agg.RollUp(agg.Stalls(cells), dims) {
+		entry := out[c.Key]
+		entry.stalled += c.Duration
+		out[c.Key] = entry
+	}
 	return out
 }
 

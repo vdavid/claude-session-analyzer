@@ -7,19 +7,31 @@ Filter, group, add up. Every question an agent or a person asks about where the 
 
 ## Must-knows
 
-- **A tool question counts only the rows a tool ran in.** Naming `class`, `group`, `leaf`, or `tool` anywhere in a query
-  puts the cells through `agg.ToolRuns` first. Every call leaves two rows, the agent composing it and the tool running,
-  and both carry the tool's name, so a total that takes them all reports the checker as costing about twice what it did
-  and the answer looks perfectly reasonable. `TestAToolFilterCountsOnlyTheRowsTheToolRanIn` holds it.
-- **That rule takes the `tool call` kind with it, on purpose.** A query filtering on a class and grouping by kind
-  reports `tool execution` and `stalled` and no `tool call`, because that row is the agent's rather than the tool's. A
-  note in the answer says so, and `TestAToolFilterGroupedByKindHasNoToolCallKindLeft` pins it.
-  `Spec.IncludeComposingRows` is the opt-out, for the rare question about the agent instead.
+- **A tool question keeps a call's three clocks apart.** Naming `class`, `group`, `leaf`, or `tool` anywhere in a query
+  sets `Result.ToolClocksApart`: `Seconds` becomes the tool running, `ComposingSeconds` the agent writing the call, and
+  `StalledSeconds` a call that came back far too late. All three arrive on a cell carrying the tool's name, so one
+  number holding them reports the checker as costing what the agent and a suspended session cost, and the answer looks
+  perfectly reasonable. `TestAToolFilterCountsOnlyTheRowsTheToolRanIn` and
+  `TestAStalledCallIsReportedApartFromWhatTheToolCost` hold it. `Spec.IncludeComposingRows` opts out of the split.
+- **Rows and calls follow the split.** A composing row is neither a row nor a call of a tool question; a stalled run is
+  both, because it was a call. Cells carrying no tool are dropped entirely (`agg.Cell.IsAboutATool`), or the answer
+  grows a nameless group holding the session's thinking and waiting.
+- **On a tool question the `tool call` kind comes back with `Seconds: 0`** and its time in `ComposingSeconds`, which is
+  correct: the row is the agent's rather than the tool's, and it isn't dropped any more.
+  `TestAToolQuestionReportsComposingTimeBesideTheToolsOwnClockRatherThanDroppingIt` pins both halves.
+- **Anywhere else `Seconds` stays whole**, because a breakdown by `kind` or by `day` has to partition lane time. There
+  the other two measures are subsets of `Seconds` rather than carved out of it, which is what `ToolClocksApart: false`
+  tells a renderer.
+- **`Group.weight` is what "biggest first" and `Top` mean**, and on a tool question it's all three clocks. Ordering by
+  `Seconds` alone sinks a group that spent its time composing (`Edit`) or stalling (`Bash (file write)`) below groups
+  costing a fraction of it, and `--top 8` then hides the rows worth looking at.
 - **The denominators are the unfiltered whole.** `Totals` covers every session in scope with no clause applied and no
-  tool-run filter, so a share says what part of the session went somewhere rather than what part of the filter did.
-  Three of them, and they answer different questions: lane time is every lane's clock added up, active is lane time with
-  every gap taken out, and wall clock is first record to last. Wall clock is summed across sessions, so two that ran
-  side by side count their overlap twice: it's honest for one session and loose for a corpus.
+  clock split, so a share says what part of the session went somewhere rather than what part of the filter did. Four of
+  them: the ladder (lane time, net, active) from `report.TotalsFrom`, plus wall clock. Wall clock is summed across
+  sessions, so two that ran side by side count their overlap twice: honest for one session and loose for a corpus.
+  Definition of the ladder: `docs/api.md`.
+- **A group's share is against lane time only.** Groups partition lane time, so an unfiltered column adds to 100%.
+  Against net, a `waiting for a person` group reads as 93% of a total it's excluded from.
 - **Lanes are counted per session and added up across them.** A lane belongs to one session, so two sessions with three
   lanes each are six. Cells that have already been summed past the lane dimension carry a count instead of a name, and
   the largest count seen is all that evidence supports, which makes the number a lower bound when two tool groups were
@@ -47,7 +59,8 @@ Filter, group, add up. Every question an agent or a person asks about where the 
 - `spec.go`: the question. `Dim` and `Dims`, `Spec`, `Clause`, the parsers a CLI hands raw flag strings to (`ParseSpec`,
   `ParseGroupBy`, `ParseClause`, `ParseDim`), matching (case-insensitive, with a leading or trailing `*` the only
   wildcard), and `Vocabulary`.
-- `stats.go`: the answer. `Source` in, `Result` out. `Totals`, `Matched`, and `Group` share `Measures`, and `Key.Value`
-  reads one dimension off a group so a caller renders a column per grouped dimension without a switch of its own.
-- Lane time, active seconds, and the rounding come from `internal/report`, so the denominator here is the same number
-  the API reports for the same sessions.
+- `stats.go`: the answer. `Source` in, `Result` out. `Totals`, `Matched`, and `Group` share `Measures`, `Key.Value`
+  reads one dimension off a group so a caller renders a column per grouped dimension without a switch of its own, and
+  `acc.add` is where the clock split happens.
+- The ladder and the rounding come from `internal/report`, so the denominators here are the same numbers the API reports
+  for the same sessions.

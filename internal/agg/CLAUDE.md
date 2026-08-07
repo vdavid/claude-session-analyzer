@@ -5,10 +5,15 @@ dimensions a caller asks for. API pie, API tool breakdown, cached digest, and a 
 
 ## Must-knows
 
-- **Call `ToolRuns` before reporting on a tool, and before rolling the kind dimension away.** Every call leaves two
-  rows: agent composing it, and tool running. Both carry the tool's name. Take both and a tool reads as costing about
-  double, and nothing in the output looks wrong. `ToolRuns` drops the `tool call` cells, which is why a tool query
-  grouped by kind shows `tool execution` and `stalled` but never `tool call`.
+- **A call spends its time on three clocks, and all three arrive on a cell carrying the group's name.** `IsComposing` is
+  the agent writing the call, `IsStall` is a call that came back far too late to have been running, `IsToolRun` is
+  either verdict that means it ran (the stall included, which is why it's what counts calls). Add them into one number
+  and a tool reads as costing what the agent and a suspension cost, with nothing in the output looking wrong.
+  `ToolRuns`, `Composing`, and `Stalls` are the filters; a tool's own clock is `ToolRuns` minus `Stalls`. Ask the
+  predicates rather than testing the kind, and ask them before rolling the kind dimension away, because that's where the
+  evidence is.
+- **`IsAboutATool` is how a tool question drops the rest.** A cell carrying no group folded into a group-keyed roll-up
+  puts the session's thinking and waiting under a nameless slice.
 - **A row crossing local midnight splits its seconds across days, counts on the day it started.** Rolling the day
   dimension away has to give the row back whole. Counting it once per midnight crossed would inflate `Rows` on a
   three-day session, and that's the one property every downstream total rests on.
@@ -25,4 +30,4 @@ dimensions a caller asks for. API pie, API tool breakdown, cached digest, and a 
 ## Module map
 
 - `agg.go`: `Dim` bitmask, `Key`, `Cell`, `Build`, `Cube.RollUp`, `RollUp` over loose cells (what a cached digest rolls
-  up again), `ToolRuns`, `Sum`, `splitByDay`.
+  up again), the four `Cell` predicates, the three filters (`ToolRuns`, `Composing`, `Stalls`), `Sum`, `splitByDay`.

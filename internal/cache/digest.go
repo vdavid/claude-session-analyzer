@@ -20,8 +20,10 @@ import (
 // stale one is invisibly wrong, so bumping this is how a rule change invalidates the corpus.
 //
 // TestTheDigestVersionMovesWithTheDerivation ties it to the golden CSV: change what the derivation outputs without
-// bumping this, and that test fails with the number to write here.
-const Version = 2
+// bumping this, and that test fails with the number to write here. It can't see the other reason to bump, which is a
+// stored number changing meaning while the derivation stays put: version 3 added `Totals.NetSeconds` and took the
+// stalls out of a tool group's `Seconds`, off the same rows version 2 was built from.
+const Version = 3
 
 // Digest is tier one: one session, summed, with no lane dimension. Every corpus query reads only these.
 type Digest struct {

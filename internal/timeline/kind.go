@@ -74,6 +74,24 @@ func (k Kind) IsWaiting() bool {
 // holes in a swimlane, and drawing a lane solid across one would claim it was busy when it wasn't.
 func (k Kind) IsGap() bool { return k.IsWaiting() || k == KindStalled || k == KindAPIError }
 
+// IsSomeoneElsesClock says the row is time that belongs to someone other than this lane's agent: a person typing, or a
+// teammate working. It's the one thing net time takes out of lane time, and it exists as a predicate because the two
+// kinds are picked out for a reason rather than as a list:
+//
+//   - A wait on a teammate is already counted as that teammate's own lane time, so a total that keeps it counts the
+//     same work twice.
+//   - A wait on a person was never agent time at all.
+//
+// The other two waits are this lane's own clock going nowhere, so net keeps them and only active takes them out. Ask
+// this rather than naming the two kinds, so a fifth wait can't be missed.
+func (k Kind) IsSomeoneElsesClock() bool {
+	switch k {
+	case KindWaitingForPerson, KindWaitingForTeammate:
+		return true
+	}
+	return false
+}
+
 // Row is one stretch of one lane's wall clock.
 type Row struct {
 	From  time.Time
