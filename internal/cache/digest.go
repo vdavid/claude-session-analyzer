@@ -31,7 +31,7 @@ import (
 // The one reason to bump that neither fingerprint can see is a stored number or field changing meaning while the rules
 // stay put. Version 3 added `Totals.NetSeconds` and took the stalls out of a tool group's `Seconds`; version 5 added
 // `category` to every stored tool group, so a digest from version 4 carries groups with no category at all.
-const Version = 5
+const Version = 6
 
 // Digest is tier one: one session, summed, with no lane dimension. Every corpus query reads only these.
 type Digest struct {

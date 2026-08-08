@@ -21,7 +21,7 @@ const goldenFingerprint = "c12fd8fb405e65aa2f4cf15aeebfd7ee6963f37ea861dad02dd37
 //
 // It's here because the golden alone can't see a rule the fixture has no call for, which has now happened twice: a
 // stored number changing meaning and the `lint` split off `build`, both invisible while every cached digest went stale.
-const classificationFingerprint = "60943be0aa73d1da055238866a9b91a500e15b5b5f49db74f0d2319c9129ce88"
+const classificationFingerprint = "1a99c1e54b5eba6b6bb274282dba37c294789ad9e3417ae65035bad9731d8836"
 
 // TestTheDigestVersionMovesWithTheDerivation is the guard on the one way this cache can be invisibly wrong.
 //

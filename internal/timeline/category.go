@@ -121,6 +121,12 @@ var groupCategories = map[string]ToolCategory{
 	"tauri (MCP)": CategoryQA,
 	// Driving a browser against the app.
 	"chrome-devtools (MCP)": CategoryQA,
+	// Cmdr's own servers, driving a dev or a production build of the app under test.
+	"cmdr-dev (MCP)":  CategoryQA,
+	"cmdr-prod (MCP)": CategoryQA,
+	// Prvw's, same idea.
+	"prvw (MCP)": CategoryQA,
+	// `db (MCP)` is deliberately not here: querying a database is work, not QA of an app.
 	// Research, not QA, though it shares the `web` class with a curl against a dev server.
 	"WebFetch": CategoryOther,
 	// Same.
@@ -183,6 +189,9 @@ var classificationProbes = []struct {
 	{"mcp__codegraph__codegraph_search", ""},
 	{"mcp__tauri__tauri_click", ""},
 	{"mcp__chrome-devtools__navigate_page", ""},
+	{"mcp__cmdr-dev__list_directory", ""},
+	{"mcp__cmdr-prod__list_directory", ""},
+	{"mcp__prvw__preview", ""},
 	{"mcp__google-sheets__get_sheet_data", ""},
 	{"Telepathy", ""},
 }

@@ -237,12 +237,16 @@ carrying its reason, and it's fine for someone else's copy of this tool to disag
 
 The cases the class can't express are keyed on the **group** name, because that's the only place the distinction exists:
 
-- `codegraph (MCP)` is `read`, because it's how the agents read a codebase. `tauri (MCP)` and `chrome-devtools (MCP)`
-  are `qa`, because they drive the product. All three are the same `mcp` class.
+- `codegraph (MCP)` is `read`, because it's how the agents read a codebase.
+- `tauri (MCP)`, `chrome-devtools (MCP)`, `cmdr-dev (MCP)`, `cmdr-prod (MCP)`, and `prvw (MCP)` are `qa`, because they
+  drive a product under test. Same `mcp` class as codegraph, opposite kind of work.
+- `db (MCP)` stays `other` on purpose, and it's the useful contrast: querying a database is work, not QA of an app.
 - `WebFetch` and `WebSearch` are `other`: research rather than QA, though they share `web` with a `curl` against a dev
   server, which stays `qa`.
 - An MCP server with no override is `other`, not `qa`. Gmail, Sheets, and Calendar arrive as MCP servers and none of
   them is QA, so guessing QA for an unknown server would be wrong more often than right.
+- **Every override needs a probe in `classificationProbes`**, or moving it later is invisible to the cache's version
+  guard. `TestTheClassificationProbesCoverEveryClassAndEveryOverride` fails with the group's name when one is missing.
 
 A row carrying no class gets no category at all. Thinking and waiting are most of a session's clock and none of it is
 tool work, so defaulting them would put a session's waiting in a bucket about tools.
